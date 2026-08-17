@@ -46,4 +46,7 @@ def add_data_points(store, metric, data_points):
 def _point_key(point):
     # `name` is the resource path Google assigns list-read points; points
     # without one (e.g. from a reconcile-style read) fall back to `time`.
-    return point.get("name") or point.get("time")
+    # Daily-rollup points (see google_health_client._list_via_daily_rollup)
+    # have neither - they're keyed by their civilStartTime instead, which
+    # uniquely identifies the rolled-up day.
+    return point.get("name") or point.get("time") or json.dumps(point.get("civilStartTime"), sort_keys=True)

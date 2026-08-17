@@ -56,16 +56,30 @@ The exact REST shape isn't in Google's own docs where we could easily verify it 
 - Pagination: `pageSize` (capped per data type — 25 for `sleep`/`exercise`, higher for others) and `pageToken` / `nextPageToken`.
 - Response: `{"dataPoints": [...], "nextPageToken": "..."}`.
 
+**Some data types don't populate the plain list endpoint at all.** Confirmed live (OAuth Playground, real account, real Fitbit Air device) on 2026-08-17: `GET .../dataTypes/steps/dataPoints` and `.../dataPoints:reconcile` both returned zero results for a week with confirmed real activity (steps visible in the Google Health app and via `users.pairedDevices`). `POST .../dataTypes/steps/dataPoints:dailyRollUp` returned real daily totals for the same range. This particular device apparently only emits `steps` as rolled-up daily totals, never as raw per-interval samples — `heart-rate` on the same device/account *did* return real data from the plain list endpoint, so this isn't a blanket account/auth issue, just a per-data-type quirk. `google_health_client.py` now routes `steps` through `dailyRollUp` (`_list_via_daily_rollup`) instead of the plain list endpoint; other data types marked `"read_method": "daily_rollup"` in `DATA_TYPES` would get the same treatment if they turn out to need it.
+
+`dailyRollUp` shape (`POST .../dataTypes/{dataTypeId}/dataPoints:dailyRollUp`, verified against `ghealth`'s `buildDailyRollupBody` and its test fixtures, not just the REST reference — the reference's field names for the request body didn't match the live API):
+```json
+{
+  "range": {
+    "start": {"date": {"year": 2026, "month": 8, "day": 10}},
+    "end": {"date": {"year": 2026, "month": 8, "day": 18}}
+  },
+  "windowSizeDays": 1
+}
+```
+`windowSizeDays` is documented as optional (default 1) but the live API 400s if it's omitted — always send it explicitly. Response: `{"rollupDataPoints": [{"civilStartTime": {...}, "civilEndTime": {...}, "steps": {"countSum": "13850"}}, ...], "nextPageToken": "..."}` — no `name` or `time` field, so `store._point_key` falls back to `civilStartTime` for dedup on these points.
+
 Data type IDs currently mapped in `google_health_client.DATA_TYPES` (our metric name → Google's `dataTypeId` → filter field):
 
-| Our metric | Google data type ID | Filter field | Time kind | Confidence |
-|---|---|---|---|---|
-| `steps` | `steps` | `steps.interval.civil_start_time` | civil | verified against `ghealth` source |
-| `heart_rate` | `heart-rate` | `heart_rate.sample_time.physical_time` | physical | verified against `ghealth` source |
-| `sleep` | `sleep` | `sleep.interval.civil_end_time` (note: **end** time, the one exception) | civil | verified against `ghealth` source |
-| `activity` | `exercise` | `exercise.interval.civil_start_time` | civil | **unverified** — inferred by pattern, not confirmed |
+| Our metric | Google data type ID | Filter field | Time kind | Read method | Confidence |
+|---|---|---|---|---|---|
+| `steps` | `steps` | `steps.interval.civil_start_time` | civil | `daily_rollup` | verified live (see above) |
+| `heart_rate` | `heart-rate` | `heart_rate.sample_time.physical_time` | physical | list | verified live |
+| `sleep` | `sleep` | `sleep.interval.civil_end_time` (note: **end** time, the one exception) | civil | list | verified live — real sleep sessions returned |
+| `activity` | `exercise` | `exercise.interval.civil_start_time` | civil | list | verified live — a real logged workout returned |
 
-Before leaning on `activity`/`exercise` for real data, confirm its filter field against the official reference (`developers.google.com/health/reference/rest/v4/users.dataTypes.dataPoints`) or by trial against the real API — it's the one entry in this table we haven't confirmed against source, just inferred from the pattern the other types follow.
+Both confirmed live (same 2026-08-17 session as the `steps` diagnosis above) — the plain list endpoint returns real records for both on this account/device, so neither needs the `daily_rollup` workaround `steps` does.
 
 ## JSON data store shape
 
@@ -88,22 +102,22 @@ Before leaning on `activity`/`exercise` for real data, confirm its filter field 
 }
 ```
 
-`store.add_data_points()` de-dupes by the point's `name` (Google's resource path for the point) or, if absent, its `time`, so re-syncing an overlapping date range is safe. `sync.sync_all()` resumes each metric from its `last_synced` date, or backfills `DEFAULT_BACKFILL_DAYS` (30) on first run.
+`store.add_data_points()` de-dupes by the point's `name` (Google's resource path for the point) or, if absent, its `time` — or, for `dailyRollUp`-sourced points which have neither, its `civilStartTime` — so re-syncing an overlapping date range is safe. `sync.sync_all()` resumes each metric from its `last_synced` date, or backfills `DEFAULT_BACKFILL_DAYS` (30) on first run.
 
 Revisit (e.g. split into one JSON file per metric) only if a single file becomes unwieldy.
 
 ## Data types to target (roughly in priority order)
 
-1. Steps — implemented
-2. Heart rate (resting + intraday, if the Google Health API's data bundles expose it) — implemented
-3. Sleep (stages, duration, efficiency) — implemented (data type ID confirmed; per-point field schema not yet confirmed)
-4. Activity/exercise logs — implemented, but the data type ID/filter field is unverified (see table above)
+1. Steps — implemented (verified live, via `daily_rollup` — see table above)
+2. Heart rate (resting + intraday, if the Google Health API's data bundles expose it) — implemented, verified live
+3. Sleep (stages, duration, efficiency) — implemented, verified live (real sessions with `shortAwakenings`, `startTime`/`endTime`, `type`, UTC offsets)
+4. Activity/exercise logs — implemented, verified live (real workout returned with `exerciseType`, `metricsSummary`, `heartRateZoneDurations`)
 5. SpO2, HRV, breathing rate, temperature (if available) — not yet added
 6. Body (weight, BMI) if logged — not yet added
 
 ## Open questions
 
 - Whether `requests` is actually present in `arcgispro-py3` — if not, `http_client.py` already falls back to `urllib.request` automatically.
-- Confirm the `activity`/`exercise` filter field (see table above) against the real API or official docs.
-- The exact per-data-type payload schema (what fields come back for `sleep`, `steps`, etc. beyond the one confirmed `heart_rate` example) — needed once `server.py` starts reshaping raw points for the frontend.
-- Any request rate limits/quotas specific to the Google Health API's REST endpoints — not yet hit in testing since all client testing so far has been against mocks, not the live API.
+- The exact per-data-type payload schema for `server.py` to reshape for the frontend — real examples now seen live for `steps` (daily rollup), `heart_rate`, `sleep` (with `shortAwakenings` sub-records), and `exercise` (with `metricsSummary`/`heartRateZoneDurations`); still worth a closer look once `server.py` is actually built, since only one week of one account's data has been observed.
+- Whether other data types beyond `steps` (SpO2, HRV, body/weight, once added) also need the `daily_rollup` read path instead of plain list — check the same way `steps` was diagnosed rather than assuming list works.
+- Any request rate limits/quotas specific to the Google Health API's REST endpoints — not yet hit in testing since all client testing so far has been against mocks except for the one-off live diagnosis above, not a full sync.
