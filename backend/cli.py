@@ -3,11 +3,14 @@
 Usage:
     python cli.py auth     Run the Google OAuth flow once and save tokens
                             to config.json (see google_health.md).
+    python cli.py sync     Pull new data from the Google Health API into
+                            backend/data/health_data.json.
 """
 
 import sys
 
 from auth import authorize
+from sync import sync_all
 
 
 def main():
@@ -18,6 +21,10 @@ def main():
     command = sys.argv[1]
     if command == "auth":
         authorize()
+    elif command == "sync":
+        results = sync_all()
+        for metric, count in results.items():
+            print(f"{metric}: {count} data point(s)")
     else:
         print(f"Unknown command: {command}\n")
         print(__doc__)
