@@ -72,6 +72,7 @@ If this step works, credentials/scopes/consent screen are all wired up correctly
   backend/data/health_data.json
   ```
   (the second one because the JSON data store will hold personal health data — keep actual pulled data out of version control too; commit a `.example` or empty placeholder instead if we want the shape documented in the repo.)
+- Keep `backend/config.json.example` as its own separate, always-placeholder file. Don't rename/move it into `backend/config.json` when setting up real credentials — copy it instead (`cp backend/config.json.example backend/config.json`) and edit the copy. Renaming loses the placeholder and, since `.gitignore` doesn't retroactively untrack a file that's already committed, risks committing real credentials under the `.example` file's git history the moment the copy is filled in and pushed.
 - Never paste the Client Secret or a token into a chat, issue, commit message, or this doc.
 
 ## 8. Checklist — before running `sync`/`serve` for the first time
