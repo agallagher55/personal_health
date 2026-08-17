@@ -76,10 +76,10 @@ Data type IDs currently mapped in `google_health_client.DATA_TYPES` (our metric 
 |---|---|---|---|---|---|
 | `steps` | `steps` | `steps.interval.civil_start_time` | civil | `daily_rollup` | verified live (see above) |
 | `heart_rate` | `heart-rate` | `heart_rate.sample_time.physical_time` | physical | list | verified live |
-| `sleep` | `sleep` | `sleep.interval.civil_end_time` (note: **end** time, the one exception) | civil | list | verified against `ghealth` source; **not yet confirmed live for this account/device** — may turn out to need `daily_rollup` too, same as `steps` |
-| `activity` | `exercise` | `exercise.interval.civil_start_time` | civil | list | **unverified** — inferred by pattern, not confirmed; may also need `daily_rollup` |
+| `sleep` | `sleep` | `sleep.interval.civil_end_time` (note: **end** time, the one exception) | civil | list | verified live — real sleep sessions returned |
+| `activity` | `exercise` | `exercise.interval.civil_start_time` | civil | list | verified live — a real logged workout returned |
 
-Before leaning on `sleep`/`activity` for real data, confirm the plain list endpoint actually returns results for this account/device (the way `steps` didn't) — trial against the real API, the same way `steps` was diagnosed above. `activity`/`exercise`'s filter field specifically is also still unconfirmed against the official reference (`developers.google.com/health/reference/rest/v4/users.dataTypes.dataPoints`).
+Both confirmed live (same 2026-08-17 session as the `steps` diagnosis above) — the plain list endpoint returns real records for both on this account/device, so neither needs the `daily_rollup` workaround `steps` does.
 
 ## JSON data store shape
 
@@ -108,16 +108,16 @@ Revisit (e.g. split into one JSON file per metric) only if a single file becomes
 
 ## Data types to target (roughly in priority order)
 
-1. Steps — implemented
-2. Heart rate (resting + intraday, if the Google Health API's data bundles expose it) — implemented
-3. Sleep (stages, duration, efficiency) — implemented (data type ID confirmed; per-point field schema not yet confirmed)
-4. Activity/exercise logs — implemented, but the data type ID/filter field is unverified (see table above)
+1. Steps — implemented (verified live, via `daily_rollup` — see table above)
+2. Heart rate (resting + intraday, if the Google Health API's data bundles expose it) — implemented, verified live
+3. Sleep (stages, duration, efficiency) — implemented, verified live (real sessions with `shortAwakenings`, `startTime`/`endTime`, `type`, UTC offsets)
+4. Activity/exercise logs — implemented, verified live (real workout returned with `exerciseType`, `metricsSummary`, `heartRateZoneDurations`)
 5. SpO2, HRV, breathing rate, temperature (if available) — not yet added
 6. Body (weight, BMI) if logged — not yet added
 
 ## Open questions
 
 - Whether `requests` is actually present in `arcgispro-py3` — if not, `http_client.py` already falls back to `urllib.request` automatically.
-- Confirm the `activity`/`exercise` filter field (see table above) against the real API or official docs.
-- The exact per-data-type payload schema (what fields come back for `sleep`, `steps`, etc. beyond the one confirmed `heart_rate` example) — needed once `server.py` starts reshaping raw points for the frontend.
-- Any request rate limits/quotas specific to the Google Health API's REST endpoints — not yet hit in testing since all client testing so far has been against mocks, not the live API.
+- The exact per-data-type payload schema for `server.py` to reshape for the frontend — real examples now seen live for `steps` (daily rollup), `heart_rate`, `sleep` (with `shortAwakenings` sub-records), and `exercise` (with `metricsSummary`/`heartRateZoneDurations`); still worth a closer look once `server.py` is actually built, since only one week of one account's data has been observed.
+- Whether other data types beyond `steps` (SpO2, HRV, body/weight, once added) also need the `daily_rollup` read path instead of plain list — check the same way `steps` was diagnosed rather than assuming list works.
+- Any request rate limits/quotas specific to the Google Health API's REST endpoints — not yet hit in testing since all client testing so far has been against mocks except for the one-off live diagnosis above, not a full sync.

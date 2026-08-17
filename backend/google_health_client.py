@@ -57,9 +57,6 @@ DATA_TYPES = {
     },
     "activity": {
         # Google Health API's data type ID for exercise/workout sessions.
-        # UNVERIFIED: inferred from the same interval/civil_start_time
-        # pattern as `steps`, since sleep was explicitly called out as the
-        # one exception. Confirm against the real API before relying on it.
         "api_id": "exercise",
         "filter_field": "exercise.interval.civil_start_time",
         "time_kind": "civil",
