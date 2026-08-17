@@ -29,6 +29,21 @@ def post_form(url, data):
         return json.loads(response.read().decode("utf-8"))
 
 
+def post_json(url, body, headers=None):
+    """POST a JSON body, return the parsed JSON response body."""
+    merged_headers = {"Content-Type": "application/json", **(headers or {})}
+
+    if _HAS_REQUESTS:
+        response = requests.post(url, json=body, headers=merged_headers)
+        response.raise_for_status()
+        return response.json()
+
+    encoded = json.dumps(body).encode("utf-8")
+    request = urllib.request.Request(url, data=encoded, headers=merged_headers, method="POST")
+    with urllib.request.urlopen(request) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
 def get_json(url, params=None, headers=None):
     """GET url (with optional query params/headers), return parsed JSON."""
     if params:
