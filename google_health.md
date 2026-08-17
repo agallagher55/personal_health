@@ -39,7 +39,7 @@ Before creating credentials, Google requires the consent screen to be configured
 1. Go to **APIs & Services > Credentials**.
 2. Click **+ Create Credentials > OAuth client ID**.
 3. When asked **"Where are you calling from?"**, choose **Web Server** (this project's backend is what will exchange the auth code for tokens, even though it's running locally).
-4. Set **Authorized redirect URIs**. Google's own quickstart uses `https://www.google.com` (paired with the OAuth 2.0 Playground) to get a first token quickly — see step 6. For our own backend to handle the redirect directly later, add a local redirect URI too, e.g. `http://localhost:8000/oauth/callback` (adjust to whatever port `backend/server.py` ends up using).
+4. Set **Authorized redirect URIs**. The OAuth 2.0 Playground (see step 6) uses a fixed redirect URI when you plug in your own Client ID/Secret — add `https://developers.google.com/oauthplayground`, or the Playground will fail with `redirect_uri_mismatch`. For our own backend to handle the redirect directly later, add a local redirect URI too: `http://localhost:8000/oauth/callback` (matches `backend/config.json.example`).
 5. Once created, **download the credentials JSON** (or copy the **Client ID** and **Client Secret** shown). Save it as `backend/config.json` (or similar) — **this file must never be committed**; see step 7.
 
 ## 5. Pick the scopes we need
@@ -58,7 +58,7 @@ Add the readonly scopes you need to the OAuth consent screen's scope list, and r
 
 Google provides a codelab for this — do it once by hand to confirm the project/credentials/scopes are all correct before wiring up our own OAuth code:
 
-- [Make your first Google Health API call using the OAuth2 Playground](https://developers.google.com/health/codelabs/make-your-first-api-call-using-oauth2-playground) — fastest path: plug your Client ID/Secret into Google's [OAuth 2.0 Playground](https://developers.google.com/oauthplayground), authorize with the scopes from step 5, and exchange for a token without writing any code yet.
+- [Make your first Google Health API call using the OAuth2 Playground](https://developers.google.com/health/codelabs/make-your-first-api-call-using-oauth2-playground) — fastest path: plug your Client ID/Secret into Google's [OAuth 2.0 Playground](https://developers.google.com/oauthplayground), authorize with the scopes from step 5, and exchange for a token without writing any code yet. Make sure `https://developers.google.com/oauthplayground` is in the OAuth client's Authorized redirect URIs (step 4) first — the Playground always redirects there when using your own credentials, and skipping this causes a `redirect_uri_mismatch` error. You can remove it again once you have a refresh token.
 - [Make your first Google Health API call](https://developers.google.com/health/codelabs/make-your-first-api-call) — the fuller walkthrough, closer to what our backend will eventually automate.
 
 If this step works, credentials/scopes/consent screen are all wired up correctly and the backend auth code (see [`docs/backend-architecture.md`](./docs/backend-architecture.md)) just needs to automate the same flow.
