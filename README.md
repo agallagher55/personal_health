@@ -24,6 +24,7 @@ personal_health/
 ├── docs/
 │   ├── backend-architecture.md
 │   └── frontend-architecture.md
+├── google_health.md          # setup guide: Google Cloud project + OAuth credentials
 ├── backend/                 # Python backend (API client, JSON storage, query API)
 └── frontend/                # vanilla JS front end
 ```
@@ -37,4 +38,4 @@ personal_health/
 
 ## Status
 
-Early planning stage. See [`planning.md`](./planning.md) for current thinking and open decisions.
+Early planning stage. See [`planning.md`](./planning.md) for current thinking and open decisions, and [`google_health.md`](./google_health.md) for the Google Cloud/OAuth setup required before running the backend.

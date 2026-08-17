@@ -53,6 +53,7 @@ No framework, no build tooling (no React/Vite/TypeScript). Plain HTML/CSS/JS ser
 
 ## Next steps
 
-1. Flesh out backend architecture — see [`docs/backend-architecture.md`](./docs/backend-architecture.md)
-2. Flesh out frontend architecture — see [`docs/frontend-architecture.md`](./docs/frontend-architecture.md)
-3. Confirm the actual `arcgispro-py3` package list (`conda list`) and register a Google Health API app before building anything else out.
+1. Follow [`google_health.md`](./google_health.md) to set up the Google Cloud project, OAuth consent screen, and credentials.
+2. Flesh out backend architecture — see [`docs/backend-architecture.md`](./docs/backend-architecture.md)
+3. Flesh out frontend architecture — see [`docs/frontend-architecture.md`](./docs/frontend-architecture.md)
+4. Confirm the actual `arcgispro-py3` package list (`conda list`) and register a Google Health API app before building anything else out.

@@ -1,0 +1,4 @@
+backend/config.json
+backend/data/health_data.json
+__pycache__/
+*.pyc
