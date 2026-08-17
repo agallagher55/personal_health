@@ -23,7 +23,8 @@ personal_health/
 ├── planning.md              # high-level planning and open questions
 ├── docs/
 │   ├── backend-architecture.md
-│   └── frontend-architecture.md
+│   ├── frontend-architecture.md
+│   └── api-contract.md      # endpoints/shapes between backend and frontend
 ├── google_health.md          # setup guide: Google Cloud project + OAuth credentials
 ├── backend/                 # Python backend (API client, JSON storage, query API)
 └── frontend/                # vanilla JS front end
