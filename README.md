@@ -1,13 +1,19 @@
 # Personal Health
 
-A personal project for exploring health data APIs — starting with **Google Health Connect / Google Fit APIs** and a **Fitbit (Fitbit Charge / Fitbit Air-tracked)** account — and building a system to pull, store, and visualize as much of that data as possible.
+A personal project for exploring health data APIs — starting with the **Google Health API** (the successor to the Fitbit Web API / Google Fit) and a Fitbit-tracked account — and building a system to pull, store, and visualize as much of that data as possible.
 
 ## Goals
 
-- Learn the Google Health API / Google Fit ecosystem hands-on.
-- Pull personal health data from a connected Fitbit device (steps, heart rate, sleep, SpO2, activity, etc.).
-- Build a Python backend that authenticates with the relevant APIs, fetches data on a schedule or on demand, and exposes it through a queryable API of our own.
-- Build a front end to explore and visualize that data (dashboard and/or per-metric pages — still deciding, see [`planning.md`](./planning.md)).
+- Learn the Google Health API ecosystem hands-on.
+- Pull personal health data (steps, heart rate, sleep, SpO2, activity, etc.) from a connected Fitbit account via the Google Health API.
+- Build a Python backend that authenticates with the API, fetches data on demand, and exposes it through a small query API of our own.
+- Build a vanilla JS front end to explore and visualize that data (dashboard-first, with room for per-metric detail pages — see [`planning.md`](./planning.md)).
+
+## Constraints (by design)
+
+- **Backend Python libraries are limited to what ships with Esri's ArcGIS Pro 3.5 default `arcgispro-py3` environment.** No `pip install`/conda env cloning for this project — if it's not already in that environment, we don't use it. See [`docs/backend-architecture.md`](./docs/backend-architecture.md) for what that means in practice and how we're verifying the package list.
+- **Storage:** a local JSON file instead of a database (SQLite included) — simple, human-readable, fine for a single-user personal project.
+- **Frontend:** vanilla JavaScript/HTML/CSS — no framework, no build step, to start.
 
 ## Project Structure (planned)
 
@@ -18,15 +24,16 @@ personal_health/
 ├── docs/
 │   ├── backend-architecture.md
 │   └── frontend-architecture.md
-├── backend/                 # Python backend (API clients, storage, API server)
-└── frontend/                # web front end
+├── backend/                 # Python backend (API client, JSON storage, query API)
+└── frontend/                # vanilla JS front end
 ```
 
 ## Tech Stack (planned)
 
-- **Backend:** Python
-- **Frontend:** TBD (leaning toward a dashboard-style single page app — see planning doc)
-- **Data sources:** Fitbit Web API, Google Fit / Health Connect API
+- **Backend:** Python, restricted to ArcGIS Pro 3.5's bundled `arcgispro-py3` packages
+- **Storage:** a JSON file on disk (no database)
+- **Frontend:** vanilla JavaScript, HTML, CSS — no framework
+- **Data source:** Google Health API (`developers.google.com/health`)
 
 ## Status
 
