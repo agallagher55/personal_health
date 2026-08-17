@@ -24,7 +24,8 @@ personal_health/
 ├── docs/
 │   ├── backend-architecture.md
 │   ├── frontend-architecture.md
-│   └── api-contract.md      # endpoints/shapes between backend and frontend
+│   ├── api-contract.md      # endpoints/shapes between backend and frontend
+│   └── local-dev-setup.md   # day-to-day: activate env, sync, serve, view dashboard
 ├── google_health.md          # setup guide: Google Cloud project + OAuth credentials
 ├── backend/                 # Python backend (API client, JSON storage, query API)
 └── frontend/                # vanilla JS front end
