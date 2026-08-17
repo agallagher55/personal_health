@@ -40,7 +40,7 @@ Specifically check for `requests` (used to call the Google Health API). If it's 
 ## 3. Set up local config (one time)
 
 From the repo root, inside the activated environment:
-1. Create `backend/config.json` with the OAuth Client ID/Secret from `google_health.md` step 4. This file is git-ignored — never commit it.
+1. Copy `backend/config.json.example` to `backend/config.json` and fill in the OAuth Client ID/Secret from `google_health.md` step 4. `config.json` is git-ignored — never commit it.
 2. Create the `backend/data/` folder if it doesn't exist yet — this is where `health_data.json` (also git-ignored) will be written on first sync.
 
 ## 4. Authorize (first run)
