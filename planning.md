@@ -59,3 +59,4 @@ No framework, no build tooling (no React/Vite/TypeScript). Plain HTML/CSS/JS ser
 4. Backend/frontend build against the shared [`docs/api-contract.md`](./docs/api-contract.md) so neither side blocks on the other.
 5. Confirm the actual `arcgispro-py3` package list (`conda list`) and register a Google Health API app before building anything else out.
 6. Once code exists, follow [`docs/local-dev-setup.md`](./docs/local-dev-setup.md) for the day-to-day run loop (activate env, auth, sync, serve).
+7. Keep [`docs/privacy-and-data-handling.md`](./docs/privacy-and-data-handling.md) in mind whenever touching credentials or the data store — check `git status` before every commit that touches `backend/`.
