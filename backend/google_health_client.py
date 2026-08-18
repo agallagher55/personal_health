@@ -62,6 +62,55 @@ DATA_TYPES = {
         "time_kind": "civil",
         "page_size": 25,
     },
+    # --- Added 2026-08-18, NOT YET VERIFIED LIVE ---------------------------
+    # api_id/filter_field for these five are inferred from the `ghealth` CLI's
+    # type registry (pkg/types/registry.go on GitHub - developers.google.com
+    # is unreachable from this environment, same issue noted for the four
+    # types above), following the same "{filter_name}.{sample_time|interval}.
+    # {physical_time|civil_start_time}" pattern the four confirmed types use,
+    # but NOT cross-checked against a real API response the way steps/
+    # heart_rate/sleep/activity were. Run `python cli.py sync` and inspect
+    # backend/data/health_data.json for these metrics before trusting the
+    # field names in server.py's reshapers - see docs/backend-architecture.md.
+    "spo2": {
+        # ghealth registry: id "oxygen-saturation", sample-based (physical time).
+        "api_id": "oxygen-saturation",
+        "filter_field": "oxygen_saturation.sample_time.physical_time",
+        "time_kind": "physical",
+        "page_size": 10000,
+    },
+    "hrv": {
+        # ghealth registry: id "heart-rate-variability", sample-based (physical time).
+        "api_id": "heart-rate-variability",
+        "filter_field": "heart_rate_variability.sample_time.physical_time",
+        "time_kind": "physical",
+        "page_size": 10000,
+    },
+    "breathing_rate": {
+        # ghealth registry: id "daily-respiratory-rate" - the "daily-" prefix
+        # suggests (unconfirmed) this type is rollup-only, similar to how
+        # `steps` needed daily_rollup for this project's specific device -
+        # see the module docstring. If a sync comes back empty, try switching
+        # read_method to "daily_rollup" the same way steps was fixed.
+        "api_id": "daily-respiratory-rate",
+        "filter_field": "daily_respiratory_rate.interval.civil_start_time",
+        "time_kind": "civil",
+        "page_size": 10000,
+    },
+    "temperature": {
+        # ghealth registry: id "core-body-temperature", sample-based (physical time).
+        "api_id": "core-body-temperature",
+        "filter_field": "core_body_temperature.sample_time.physical_time",
+        "time_kind": "physical",
+        "page_size": 10000,
+    },
+    "weight": {
+        # ghealth registry: id "weight", sample-based (physical time).
+        "api_id": "weight",
+        "filter_field": "weight.sample_time.physical_time",
+        "time_kind": "physical",
+        "page_size": 10000,
+    },
 }
 
 

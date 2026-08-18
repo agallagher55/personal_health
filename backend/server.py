@@ -27,7 +27,7 @@ FRONTEND_DIR = (Path(__file__).parent.parent / "frontend").resolve()
 DEFAULT_HOST = "localhost"
 DEFAULT_PORT = 8000
 
-KNOWN_METRICS = ("steps", "heart_rate", "sleep", "activity")
+KNOWN_METRICS = ("steps", "heart_rate", "sleep", "activity", "spo2", "hrv", "breathing_rate", "temperature", "weight")
 
 # Default lookback window, in days (inclusive of `to`), when a request omits
 # `from` - per docs/api-contract.md ("last 7 days" for the dashboard summary,
@@ -231,11 +231,115 @@ def _reshape_activity(points):
     return [{"date": d, "exercises": ex} for d, ex in sorted(by_date.items())]
 
 
+def _reshape_sample_series(points, nested_key, value_keys):
+    """Shared extraction for sample-based metrics whose payload nests under
+    `nested_key` with a `sampleTime` (civilTime preferred, else physicalTime
+    + utcOffset) and a scalar reading under one of `value_keys` - the shape
+    confirmed live for heart_rate. UNVERIFIED for the metrics that use this
+    helper below (spo2, hrv, temperature, weight) - see
+    google_health_client.DATA_TYPES's 2026-08-18 comment. Returns
+    {date: [values seen that day]} for the caller to aggregate.
+    """
+    by_date = {}
+    for p in points:
+        payload = p.get(nested_key)
+        if not isinstance(payload, dict):
+            continue
+        sample_time = payload.get("sampleTime")
+        if not isinstance(sample_time, dict):
+            continue
+        d = _civil_value_to_date(sample_time.get("civilTime")) or _local_date_from_utc(
+            sample_time.get("physicalTime"), sample_time.get("utcOffset")
+        )
+        value = None
+        for key in value_keys:
+            if key in payload:
+                value = _to_number(payload[key])
+                break
+        if d is None or value is None:
+            continue
+        by_date.setdefault(d, []).append(value)
+    return by_date
+
+
+def _reshape_spo2(points):
+    """UNVERIFIED - guesses the payload nests under "oxygenSaturation" (the
+    camelCase of api_id "oxygen-saturation", matching the pattern the four
+    confirmed metrics follow) with a "percentage" reading. Averages same-day
+    samples."""
+    by_date = _reshape_sample_series(points, "oxygenSaturation", ["percentage", "value"])
+    return [{"date": d, "value": round(sum(v) / len(v), 1)} for d, v in sorted(by_date.items())]
+
+
+def _reshape_hrv(points):
+    """UNVERIFIED - guesses "heartRateVariability" with an RMSSD-style
+    reading (per the ghealth CLI registry's description). Averages
+    same-day samples."""
+    by_date = _reshape_sample_series(points, "heartRateVariability", ["rmssdMillis", "rmssd", "value"])
+    return [{"date": d, "value": round(sum(v) / len(v), 1)} for d, v in sorted(by_date.items())]
+
+
+def _reshape_temperature(points):
+    """UNVERIFIED - guesses "coreBodyTemperature" with a Celsius reading.
+    Averages same-day samples."""
+    by_date = _reshape_sample_series(points, "coreBodyTemperature", ["temperatureCelsius", "celsius", "value"])
+    return [{"date": d, "value": round(sum(v) / len(v), 2)} for d, v in sorted(by_date.items())]
+
+
+def _reshape_weight(points):
+    """UNVERIFIED - guesses "weight" with a grams reading (per the ghealth
+    CLI registry's field name), converted to kg. Uses the last same-day
+    reading rather than averaging, since weight is a point-in-time
+    measurement, not a rate."""
+    by_date = _reshape_sample_series(points, "weight", ["weightGrams", "grams", "value"])
+
+    def to_kg(v):
+        # Guards against the value already being in kg rather than grams,
+        # in case that guess is wrong - a plausible adult weight in grams
+        # is in the tens of thousands; in kg it's well under 300.
+        return round(v / 1000, 1) if v > 300 else v
+
+    return [{"date": d, "value": to_kg(v[-1])} for d, v in sorted(by_date.items())]
+
+
+def _reshape_breathing_rate(points):
+    """UNVERIFIED - api_id "daily-respiratory-rate" is civil/daily (unlike
+    the other four new metrics), so its payload shape is guessed rather
+    than following _reshape_sample_series: tries a flat dailyRollUp-style
+    civilStartTime + a "dailyRespiratoryRate" payload first, falling back
+    to a nested sampleTime shape like the sample-based metrics above."""
+    by_date = {}
+    for p in points:
+        d = _civil_value_to_date(p.get("civilStartTime")) or _civil_value_to_date(p.get("civilEndTime"))
+        payload = p.get("dailyRespiratoryRate")
+        value = None
+        if isinstance(payload, dict):
+            for key in ("breathsPerMinute", "value", "rate"):
+                if key in payload:
+                    value = _to_number(payload[key])
+                    break
+            if d is None:
+                sample_time = payload.get("sampleTime")
+                if isinstance(sample_time, dict):
+                    d = _civil_value_to_date(sample_time.get("civilTime")) or _local_date_from_utc(
+                        sample_time.get("physicalTime"), sample_time.get("utcOffset")
+                    )
+        if d is None or value is None:
+            continue
+        by_date.setdefault(d, []).append(value)
+    return [{"date": d, "value": round(sum(v) / len(v), 1)} for d, v in sorted(by_date.items())]
+
+
 _RESHAPERS = {
     "steps": _reshape_steps,
     "heart_rate": _reshape_heart_rate,
     "sleep": _reshape_sleep,
     "activity": _reshape_activity,
+    "spo2": _reshape_spo2,
+    "hrv": _reshape_hrv,
+    "breathing_rate": _reshape_breathing_rate,
+    "temperature": _reshape_temperature,
+    "weight": _reshape_weight,
 }
 
 
