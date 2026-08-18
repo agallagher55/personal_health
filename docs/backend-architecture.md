@@ -124,23 +124,33 @@ dev — see `docs/local-dev-setup.md`). Built on `ThreadingHTTPServer` /
 `BaseHTTPRequestHandler`, no third-party framework. CORS is wide open
 (`Access-Control-Allow-Origin: *`) since this only ever runs on localhost.
 
-**Reshaping raw store points into the contract's per-metric shapes is only
-fully verified for `steps`** (the `dailyRollUp` shape confirmed live above).
-`heart_rate`, `sleep`, and `activity` go through defensive `_extract_*`
-helpers in `server.py` that try a few plausible field paths based on the
-partial live confirmations noted above (bpm-style fields, `exerciseType`/
-`metricsSummary`, etc.) and silently skip points they can't parse, rather
-than guessing wrong and mislabeling data. In particular:
-- `heart_rate`'s daily "resting" value is currently approximated as the
-  **minimum bpm sample seen that day** — the API's `heart-rate` data type is
-  intraday samples, not a dedicated resting-heart-rate metric. Revisit if
+**Reshaping raw store points into the contract's per-metric shapes is now
+verified for all four metrics** against a real `backend/data/health_data.json`
+from a live sync (2026-08-18). Confirmed field paths:
+- `steps`: flat dailyRollUp points — `civilStartTime`/`civilEndTime` are
+  `{"date": {"year", "month", "day"}}`, count at `steps.countSum`.
+- `heart_rate`: nested under `heartRate` — date from
+  `heartRate.sampleTime.civilTime.date` (local calendar date; falls back to
+  truncating `sampleTime.physicalTime`), bpm from
+  `heartRate.beatsPerMinute`. Daily "resting" value is still approximated as
+  the **minimum bpm sample seen that day** — the API's `heart-rate` data type
+  is intraday samples, not a dedicated resting-heart-rate metric. Revisit if
   a real resting-heart-rate data type/bundle turns out to exist.
-- `sleep` stage durations default to `0` rather than being confirmed against
-  a real stage sub-record shape.
+- `sleep`: nested under `sleep` — session date from `sleep.interval.endTime`
+  (falls back to `startTime`), duration from `sleep.summary.minutesAsleep`,
+  and stage minutes summed from `sleep.summary.stagesSummary` (a list of
+  `{"type": "AWAKE"|"LIGHT"|"DEEP"|"REM", "minutes": "...", "count": "..."}`)
+  rather than the per-segment `sleep.stages` list. A stage type absent from
+  `stagesSummary` defaults to `0`.
+- `activity`: nested under `exercise` — date from `exercise.interval.startTime`,
+  type from `exercise.exerciseType`, calories from
+  `exercise.metricsSummary.caloriesKcal`, duration from
+  `exercise.activeDuration` (a `"<seconds>s"` string, converted to minutes).
 
-**Re-verify these against a real `backend/data/health_data.json` from a live
-sync** (this doc's assumptions were written without one available) and
-tighten `server.py`'s extraction helpers accordingly once done.
+`server.py`'s `_extract_*`/`_reshape_*` helpers still skip points they can't
+parse rather than raising, so a future account/device with a differently
+shaped payload degrades to "fewer/empty records" instead of a 500 — but the
+field paths themselves are no longer guesses.
 
 ## Open questions
 

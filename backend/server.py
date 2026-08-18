@@ -8,11 +8,9 @@ delegates to sync.sync_all(). Also serves frontend/ as static files (see
 docs/frontend-architecture.md), so `python cli.py serve` is the only thing
 that needs to be running for local dev.
 
-Reshaping raw store points into the api-contract.md response shapes is
-best-effort for heart_rate/sleep/activity: only `steps` (via dailyRollUp)
-has a fully confirmed live field shape - see the "Reshaping notes" comments
-below and docs/backend-architecture.md's open questions. Revisit the
-_extract_* helpers once more real payloads have been captured.
+Reshaping raw store points into the api-contract.md response shapes is now
+confirmed against a real backend/data/health_data.json (synced live
+2026-08-18) for all four metrics - see the "Reshaping notes" comments below.
 """
 
 import json
@@ -64,15 +62,11 @@ def _in_range(date_str, from_d, to_d):
 # ---------------------------------------------------------------------------
 # Raw-point field extraction
 #
-# Reshaping notes: only `steps` (dailyRollUp) has a field shape confirmed
-# against a live response (docs/backend-architecture.md). heart_rate,
-# sleep, and activity are read via the plain list endpoint, whose exact
-# JSON shape hasn't been directly captured yet - these helpers try a few
-# plausible field paths defensively (based on the partial field names that
-# *have* been observed live: beatsPerMinute-style bpm fields, and
-# exerciseType/metricsSummary for activity) rather than assuming one, and
-# silently skip points they can't parse rather than raising, so a shape
-# mismatch degrades to "fewer/empty records" instead of a 500.
+# Reshaping notes: field paths below are confirmed against a real synced
+# backend/data/health_data.json (live account, 2026-08-18) for all four
+# metrics - see docs/backend-architecture.md. Each metric's payload nests
+# its fields under a key named after the Google data type (`heartRate`,
+# `sleep`, `exercise`), except `steps`' dailyRollUp points, which are flat.
 # ---------------------------------------------------------------------------
 
 def _to_number(value):
@@ -88,9 +82,8 @@ def _to_number(value):
 
 def _civil_value_to_date(value):
     """Best-effort YYYY-MM-DD extraction from one of the time-ish shapes the
-    API uses: a plain ISO string, a dailyRollUp-style
-    {"date": {"year", "month", "day"}}, or a {"civilDateTime"/"dateTime"/
-    "physicalTime": "..."} wrapper.
+    API uses: a plain ISO string, or a dailyRollUp-style
+    {"date": {"year", "month", "day"}}.
     """
     if isinstance(value, str):
         return value[:10]
@@ -98,33 +91,15 @@ def _civil_value_to_date(value):
         d = value.get("date")
         if isinstance(d, dict) and {"year", "month", "day"} <= d.keys():
             return f'{d["year"]:04d}-{d["month"]:02d}-{d["day"]:02d}'
-        for key in ("civilDateTime", "dateTime", "physicalTime"):
-            v = value.get(key)
-            if isinstance(v, str):
-                return v[:10]
     return None
 
 
-def _extract_date(point, *keys):
-    """Try each of `keys` (in order) as a top-level field on `point`,
-    returning the first one that yields a parseable date.
-    """
-    for key in keys:
-        d = _civil_value_to_date(point.get(key))
-        if d:
-            return d
-    return None
-
-
-def _extract_bpm(point):
-    if "beatsPerMinute" in point:
-        return _to_number(point["beatsPerMinute"])
-    heart_rate = point.get("heartRate")
-    if isinstance(heart_rate, dict):
-        for key in ("bpm", "beatsPerMinute", "value"):
-            if key in heart_rate:
-                return _to_number(heart_rate[key])
-    return None
+def _parse_duration_seconds(value):
+    """Parses a duration string like "1813.200s" (as seen on
+    exercise.activeDuration) into seconds, or None."""
+    if not isinstance(value, str) or not value.endswith("s"):
+        return None
+    return _to_number(value[:-1])
 
 
 # ---------------------------------------------------------------------------
@@ -132,9 +107,12 @@ def _extract_bpm(point):
 # ---------------------------------------------------------------------------
 
 def _reshape_steps(points):
+    """dailyRollUp points are flat: civilStartTime/civilEndTime are
+    {"date": {year, month, day}, "time": {}} and the count lives at
+    steps.countSum."""
     totals = {}
     for p in points:
-        d = _extract_date(p, "civilStartTime", "civilEndTime")
+        d = _civil_value_to_date(p.get("civilStartTime")) or _civil_value_to_date(p.get("civilEndTime"))
         count = _to_number((p.get("steps") or {}).get("countSum"))
         if d is None or count is None:
             continue
@@ -145,12 +123,15 @@ def _reshape_steps(points):
 def _reshape_heart_rate(points):
     """Approximates a daily "resting" value as the minimum bpm sample seen
     that day, since heart_rate is read as intraday samples, not a
-    dedicated resting-heart-rate data type - see the module docstring.
-    """
+    dedicated resting-heart-rate data type. Fields live under
+    heartRate.sampleTime.civilTime.date (preferred, local calendar date)
+    and heartRate.beatsPerMinute."""
     by_date = {}
     for p in points:
-        d = _extract_date(p, "sampleTime", "physicalTime", "time")
-        bpm = _extract_bpm(p)
+        heart_rate = p.get("heartRate") or {}
+        sample_time = heart_rate.get("sampleTime") or {}
+        d = _civil_value_to_date(sample_time.get("civilTime")) or _civil_value_to_date(sample_time.get("physicalTime"))
+        bpm = _to_number(heart_rate.get("beatsPerMinute"))
         if d is None or bpm is None:
             continue
         by_date.setdefault(d, []).append(bpm)
@@ -158,42 +139,49 @@ def _reshape_heart_rate(points):
 
 
 def _reshape_sleep(points):
-    """One record per sleep session, keyed by the date it ended on (sleep is
-    fetched by civil_end_time - see docs/backend-architecture.md). Stage
-    durations default to 0 rather than being omitted (per api-contract.md's
-    "present but empty over missing" convention) since the exact stage
-    sub-record shape hasn't been confirmed live yet.
-    """
+    """One record per sleep session, keyed by the date the session ended on
+    (sleep is fetched by civil_end_time - see docs/backend-architecture.md).
+    Fields live under sleep.interval, sleep.summary (minutesAsleep), and
+    sleep.summary.stagesSummary (a list of {type, minutes, count} - types
+    seen live: AWAKE, LIGHT, DEEP, REM). Stage durations default to 0 for
+    any stage type absent from stagesSummary."""
     records = []
     for p in points:
-        d = _extract_date(p, "civilEndTime", "civilStartTime", "endTime", "startTime")
+        sleep = p.get("sleep") or {}
+        interval = sleep.get("interval") or {}
+        d = _civil_value_to_date(interval.get("endTime")) or _civil_value_to_date(interval.get("startTime"))
         if d is None:
             continue
-        duration = _to_number(p.get("durationMinutes")) or 0
-        stages_raw = p.get("stages") or {}
-        stages = {
-            "light": _to_number(stages_raw.get("light")) or 0,
-            "deep": _to_number(stages_raw.get("deep")) or 0,
-            "rem": _to_number(stages_raw.get("rem")) or 0,
-            "awake": _to_number(stages_raw.get("awake")) or 0,
-        }
+        summary = sleep.get("summary") or {}
+        duration = _to_number(summary.get("minutesAsleep")) or 0
+        stages = {"light": 0, "deep": 0, "rem": 0, "awake": 0}
+        for stage in summary.get("stagesSummary") or []:
+            key = str(stage.get("type", "")).lower()
+            if key in stages:
+                stages[key] += _to_number(stage.get("minutes")) or 0
         records.append({"date": d, "duration_minutes": duration, "stages": stages})
     return sorted(records, key=lambda r: r["date"])
 
 
 def _reshape_activity(points):
+    """Fields live under exercise.interval, exercise.exerciseType, and
+    exercise.metricsSummary (caloriesKcal). Duration comes from
+    exercise.activeDuration, a "<seconds>s" string."""
     by_date = {}
     for p in points:
-        d = _extract_date(p, "civilStartTime", "civilEndTime", "startTime")
+        exercise = p.get("exercise") or {}
+        interval = exercise.get("interval") or {}
+        d = _civil_value_to_date(interval.get("startTime")) or _civil_value_to_date(interval.get("endTime"))
         if d is None:
             continue
-        metrics_summary = p.get("metricsSummary") or {}
-        exercise = {
-            "type": p.get("exerciseType") or p.get("type"),
-            "duration_minutes": _to_number(p.get("durationMinutes")),
-            "calories": _to_number(metrics_summary.get("calories") or metrics_summary.get("caloriesSum")),
+        metrics_summary = exercise.get("metricsSummary") or {}
+        duration_seconds = _parse_duration_seconds(exercise.get("activeDuration"))
+        record = {
+            "type": exercise.get("exerciseType") or exercise.get("displayName"),
+            "duration_minutes": round(duration_seconds / 60, 1) if duration_seconds is not None else None,
+            "calories": _to_number(metrics_summary.get("caloriesKcal")),
         }
-        by_date.setdefault(d, []).append(exercise)
+        by_date.setdefault(d, []).append(record)
     return [{"date": d, "exercises": ex} for d, ex in sorted(by_date.items())]
 
 
