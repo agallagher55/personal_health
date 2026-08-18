@@ -310,31 +310,35 @@ def _reshape_weight(points):
 
 
 def _reshape_breathing_rate(points):
-    """Confirmed live 2026-08-19 that this type is dailyRollUp-only (the
-    plain list endpoint 400s outright) - see google_health_client.DATA_TYPES.
-    Points are flat, like steps': top-level civilStartTime/civilEndTime.
-    The rollup payload's own field name is still UNVERIFIED though - tries a
-    "dailyRespiratoryRate" key (steps' rollup payload key matched its plain
-    api_id "steps" exactly; this guesses the camelCase-of-hyphenated-id
-    pattern the list-endpoint types follow instead, since "daily-respiratory-
-    rate" itself would be an unusual JSON key). Falls back to a nested
-    sampleTime shape in case the rollup response isn't flat after all."""
+    """Confirmed live 2026-08-19: nests under "dailyRespiratoryRate" (the
+    camelCase-of-hyphenated-id guess was right) with "breathsPerMinute" as
+    guessed, but the date is nested INSIDE that same payload as a
+    dailyRollUp-style {"date": {year, month, day}} - not a sibling
+    top-level civilStartTime/civilEndTime like steps' actual dailyRollUp
+    points, despite this type using the plain list endpoint, not
+    dailyRollUp (see google_health_client.DATA_TYPES). The value was being
+    found correctly from the start; only the date lookup was wrong, so
+    every point was silently dropped. Falls back to the previously-guessed
+    shapes in case a different account/device emits one of those instead."""
     by_date = {}
     for p in points:
-        d = _civil_value_to_date(p.get("civilStartTime")) or _civil_value_to_date(p.get("civilEndTime"))
         payload = p.get("dailyRespiratoryRate")
         value = None
+        d = None
         if isinstance(payload, dict):
             for key in ("breathsPerMinute", "value", "rate"):
                 if key in payload:
                     value = _to_number(payload[key])
                     break
+            d = _civil_value_to_date(payload)
             if d is None:
                 sample_time = payload.get("sampleTime")
                 if isinstance(sample_time, dict):
                     d = _civil_value_to_date(sample_time.get("civilTime")) or _local_date_from_utc(
                         sample_time.get("physicalTime"), sample_time.get("utcOffset")
                     )
+        if d is None:
+            d = _civil_value_to_date(p.get("civilStartTime")) or _civil_value_to_date(p.get("civilEndTime"))
         if d is None or value is None:
             continue
         by_date.setdefault(d, []).append(value)

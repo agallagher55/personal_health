@@ -80,13 +80,13 @@ Data type IDs currently mapped in `google_health_client.DATA_TYPES` (our metric 
 | `activity` | `exercise` | `exercise.interval.civil_start_time` | civil | list | verified live — a real logged workout returned |
 | `spo2` | `oxygen-saturation` | `oxygen_saturation.sample_time.physical_time` | physical | list | verified live — real values rendering correctly (2026-08-19) |
 | `hrv` | `heart-rate-variability` | `heart_rate_variability.sample_time.physical_time` | physical | list | verified live — see reshaping note below (the value field name needed a fix) |
-| `breathing_rate` | `daily-respiratory-rate` | `daily_respiratory_rate.date` | `civil_date` (bare date, no time) | list | **unverified, 3rd attempt** — first two guesses (`dailyRollUp`; `.interval.civil_start_time`) were confirmed wrong live; this one's field path comes from the `ghealth` registry's actual `TimeFieldDaily` → `.date` mapping, not yet retested |
+| `breathing_rate` | `daily-respiratory-rate` | `daily_respiratory_rate.date` | `civil_date` (bare date, no time) | list | verified live — 3rd attempt on the filter field, but real data now syncing and rendering correctly |
 | `temperature` | `core-body-temperature` | `core_body_temperature.sample_time.physical_time` | physical | list | **unverified** — no data synced yet to check against (account may not have this data type) |
 | `weight` | `weight` | `weight.sample_time.physical_time` | physical | list | verified live — real values rendering correctly (2026-08-19) |
 
 Both `sleep`/`activity` confirmed live (same 2026-08-17 session as the `steps` diagnosis above) — the plain list endpoint returns real records for both on this account/device, so neither needs the `daily_rollup` workaround `steps` does.
 
-`spo2`, `hrv`, and `weight` are now confirmed live (2026-08-19) — real data synced and rendered correctly on the dashboard. `breathing_rate` took three attempts to even get a data type ID Google would accept a request for at all (see its confidence note above); `temperature` hasn't synced any data yet, so its field names are still an open guess. `server.py`'s reshapers for `breathing_rate`/`temperature` remain best-effort until confirmed the same way `hrv` was.
+`spo2`, `hrv`, `breathing_rate`, and `weight` are now confirmed live (2026-08-19) — real data synced and rendered correctly on the dashboard. `breathing_rate` took three attempts to even get a data type ID/filter Google would accept a request for at all (see its confidence note above), plus one more fix once real points arrived: the date was nested inside `dailyRespiratoryRate.date` (a `{year, month, day}` dict, like `steps`' dailyRollUp shape), not a sibling top-level field the way the fix first guessed - the value field name (`breathsPerMinute`) was right from the start. `temperature` hasn't synced any data yet, so its field names are still an open guess - only metric left unconfirmed.
 
 ## JSON data store shape
 
@@ -159,21 +159,24 @@ parse rather than raising, so a future account/device with a differently
 shaped payload degrades to "fewer/empty records" instead of a 500 — but the
 field paths themselves are no longer guesses.
 
-**`spo2`, `hrv`, and `weight` were the same kind of guess** (added
-2026-08-18) that `heart_rate`/`sleep`/`activity` started as, and are now
-similarly confirmed live (2026-08-19): `_reshape_sample_series()`'s nested-
-key/`sampleTime` guess was right for all three, out of the box, for `spo2`
-and `weight`. `hrv` needed one fix — the value field is
-`rootMeanSquareOfSuccessiveDifferencesMilliseconds`, not the
+**`spo2`, `hrv`, `breathing_rate`, and `weight` were the same kind of guess**
+(added 2026-08-18) that `heart_rate`/`sleep`/`activity` started as, and are
+now similarly confirmed live (2026-08-19): `_reshape_sample_series()`'s
+nested-key/`sampleTime` guess was right for all three sample-based ones out
+of the box, for `spo2` and `weight`. `hrv` needed one fix — the value field
+is `rootMeanSquareOfSuccessiveDifferencesMilliseconds`, not the
 `rmssdMillis`/`rmssd`/`value` guesses it started with (those stayed as
-trailing fallbacks). **`breathing_rate` and `temperature` are still
-unconfirmed** — `_reshape_breathing_rate()` is a separate function since
-that type is civil/daily rather than sample-based, and `_reshape_temperature`
-hasn't had any real data to check its field-name guesses against yet.
+trailing fallbacks). `breathing_rate` (civil/daily, so a separate
+`_reshape_breathing_rate()` rather than `_reshape_sample_series()`) had its
+value field name (`breathsPerMinute`) right immediately but needed one fix
+to its date lookup: the date is nested *inside* the `dailyRespiratoryRate`
+payload as a `{year, month, day}` dict, not a sibling top-level field.
+**`temperature` is the only metric still unconfirmed** — no real data has
+synced for it yet to check its field-name guesses against.
 
 ## Open questions
 
 - Whether `requests` is actually present in `arcgispro-py3` — if not, `http_client.py` already falls back to `urllib.request` automatically.
-- The exact per-data-type payload schema for `breathing_rate`/`temperature` reshaping in `server.py` — see "Query API" above. (`heart_rate`/`sleep`/`activity`/`spo2`/`hrv`/`weight` all went through this same unverified state before being confirmed live.)
-- Whether `breathing_rate`'s data type ID/filter field is even right yet — two guesses have been confirmed wrong live so far (see the data type table above); a third is pushed but not retested.
+- The exact per-data-type payload schema for `temperature` reshaping in `server.py` — see "Query API" above. (Every other metric went through this same unverified state before being confirmed live.)
+- Whether `temperature`'s data type is even available on this account - `core-body-temperature` may need the same kind of live back-and-forth `breathing_rate` did once it actually returns something to check.
 - Any request rate limits/quotas specific to the Google Health API's REST endpoints — not yet hit in testing since all client testing so far has been against mocks except for the one-off live diagnosis above, not a full sync.
