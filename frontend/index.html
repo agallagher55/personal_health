@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Personal Health</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>Personal Health</h1>
+    <form class="range-controls" id="range-form">
+      <label>From <input type="date" id="range-from" /></label>
+      <label>To <input type="date" id="range-to" /></label>
+      <button type="submit" id="range-apply">Apply</button>
+      <button type="button" id="sync-now">Sync now</button>
+    </form>
+  </header>
+
+  <p id="status" class="status" role="status"></p>
+
+  <main class="dashboard-grid">
+    <section class="card">
+      <h2>Steps</h2>
+      <div id="steps-card-body"></div>
+    </section>
+
+    <section class="card">
+      <h2>Resting Heart Rate</h2>
+      <div id="heart-rate-card-body"></div>
+    </section>
+
+    <section class="card">
+      <h2>Sleep</h2>
+      <div id="sleep-card-body"></div>
+    </section>
+
+    <section class="card">
+      <h2>Activity</h2>
+      <div id="activity-card-body"></div>
+    </section>
+  </main>
+
+  <script type="module" src="js/dashboard.js"></script>
+</body>
+</html>
