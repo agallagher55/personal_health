@@ -31,17 +31,23 @@ def save_store(store):
 
 
 def add_data_points(store, metric, data_points):
-    """Merge new raw data points into the store under `metric`, de-duped by
-    the Google Health API's own point identifier so re-running sync over
-    an overlapping date range doesn't create duplicates.
+    """Merge new raw data points into the store under `metric`, keyed by the
+    Google Health API's own point identifier so re-running sync over an
+    overlapping date range doesn't create duplicates.
+
+    Upserts rather than skip-if-seen: a repeat key doesn't always mean
+    identical content. `steps`' dailyRollUp points are keyed by calendar day
+    (see _point_key), and "today"'s rollup total legitimately increases as
+    more steps happen - syncing again with the same day-key must overwrite
+    the earlier, now-stale total, not discard the update. (A `name`-keyed
+    point, a real past sleep/exercise session, won't actually change
+    content between syncs, so overwriting it with itself is a no-op.)
     """
     existing = store.setdefault("metrics", {}).setdefault(metric, [])
-    seen = {_point_key(p) for p in existing}
+    by_key = {_point_key(p): p for p in existing}
     for point in data_points:
-        key = _point_key(point)
-        if key not in seen:
-            existing.append(point)
-            seen.add(key)
+        by_key[_point_key(point)] = point
+    store["metrics"][metric] = list(by_key.values())
 
 
 def _point_key(point):
