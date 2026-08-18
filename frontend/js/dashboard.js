@@ -71,7 +71,15 @@ function init() {
       const counts = Object.entries(result.synced)
         .map(([metric, count]) => `${metric}: ${count}`)
         .join(", ");
-      setStatus(`Synced (${counts})`);
+      // A partial failure (see docs/api-contract.md's POST /api/sync) still
+      // means the other metrics genuinely synced - report both rather than
+      // hiding the failure or treating the whole sync as an error.
+      if (result.errors && Object.keys(result.errors).length > 0) {
+        const failed = Object.keys(result.errors).join(", ");
+        setStatus(`Synced (${counts}) — failed: ${failed}`, true);
+      } else {
+        setStatus(`Synced (${counts})`);
+      }
     } catch (err) {
       setStatus(`Sync failed: ${err.message}`, true);
     } finally {

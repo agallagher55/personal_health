@@ -26,9 +26,11 @@ def main():
     if command == "auth":
         authorize()
     elif command == "sync":
-        results = sync_all()
+        results, errors = sync_all()
         for metric, count in results.items():
             print(f"{metric}: {count} data point(s)")
+        for metric, message in errors.items():
+            print(f"{metric}: FAILED - {message}")
     elif command == "serve":
         host = sys.argv[2] if len(sys.argv) > 2 else DEFAULT_HOST
         port = int(sys.argv[3]) if len(sys.argv) > 3 else DEFAULT_PORT
