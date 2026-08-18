@@ -45,10 +45,17 @@ Dashboard-level summary across all metrics for a date range — the single call 
     ],
     "activity": [
       { "date": "2026-08-11", "exercises": [ { "type": "walk", "duration_minutes": 32, "calories": 140 } ] }
-    ]
+    ],
+    "spo2": [ { "date": "2026-08-11", "value": 97.0 } ],
+    "hrv": [ { "date": "2026-08-11", "value": 45.0 } ],
+    "breathing_rate": [ { "date": "2026-08-11", "value": 15.2 } ],
+    "temperature": [ { "date": "2026-08-11", "value": 36.8 } ],
+    "weight": [ { "date": "2026-08-11", "value": 81.5 } ]
   }
 }
 ```
+
+`spo2`/`hrv`/`breathing_rate`/`temperature`/`weight` share one `{ date, value }` shape (a same-day average, except `weight`, which takes the last same-day reading). **Field-shape UNVERIFIED as of 2026-08-18** — added without a live sync to confirm the raw payload against, unlike the other four metrics; see `docs/backend-architecture.md`'s reshaping notes. `value` may come back `null`/inconsistent, or the array may stay empty even with real data, until confirmed.
 
 Any metric with no records in range is present as an empty array (`"heart_rate": []`), not omitted — keeps the frontend's widget code from having to check for missing keys.
 
@@ -56,7 +63,7 @@ Any metric with no records in range is present as an empty array (`"heart_rate":
 
 Single-metric detail, for per-metric pages (e.g. `heart-rate.html`) that want more than the dashboard summary gives. Default range: last 30 days if omitted.
 
-`{metric}` is one of: `steps`, `heart_rate`, `sleep`, `activity` (extend this list as new data types are added — keep it in sync with `backend/store.py`).
+`{metric}` is one of: `steps`, `heart_rate`, `sleep`, `activity`, `spo2`, `hrv`, `breathing_rate`, `temperature`, `weight` (extend this list as new data types are added — keep it in sync with `backend/server.py`'s `KNOWN_METRICS`).
 
 **Request:** `GET /api/metrics/heart_rate?from=2026-07-18&to=2026-08-17`
 
