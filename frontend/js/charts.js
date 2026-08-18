@@ -13,11 +13,31 @@ function prepareCanvas(canvas) {
   return { ctx, width: cssWidth, height: cssHeight };
 }
 
+const LABEL_COLOR = "#64748b"; // matches css/styles.css's --text-muted - labels
+// are never drawn in the series color (see the dataviz skill: text wears
+// text tokens, not the data color).
+const LABEL_FONT = "10px system-ui, sans-serif";
+
+function formatValue(v) {
+  return Number.isInteger(v) ? v.toLocaleString() : v.toLocaleString(undefined, { maximumFractionDigits: 1 });
+}
+
+function formatShortDate(dateStr) {
+  const d = new Date(`${dateStr}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 /**
  * Draws a simple line sparkline for `values` (an array of numbers; gaps can
  * be represented as null/undefined and are skipped, not interpolated).
+ *
+ * Labels selectively rather than on every point (see the dataviz skill):
+ * the min/max values (the extremes - the point of a trend line) when
+ * `labelExtremes` is set, and the first/last x-axis labels when `labels`
+ * (e.g. each point's date) is provided.
  */
-export function drawSparkline(canvas, values, { color = "#3b82f6", padding = 4 } = {}) {
+export function drawSparkline(canvas, values, { color = "#3b82f6", padding = 4, labels = null, labelExtremes = true } = {}) {
   const { ctx, width, height } = prepareCanvas(canvas);
   ctx.clearRect(0, 0, width, height);
 
@@ -26,22 +46,34 @@ export function drawSparkline(canvas, values, { color = "#3b82f6", padding = 4 }
     .filter((p) => typeof p.v === "number" && !Number.isNaN(p.v));
 
   if (points.length === 0) {
-    ctx.fillStyle = "#94a3b8";
+    ctx.fillStyle = LABEL_COLOR;
     ctx.font = "12px system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.fillText("no data", width / 2, height / 2);
     return;
   }
 
+  const hasDateLabels = Array.isArray(labels) && labels.length === values.length;
+  const hasExtremeLabels = labelExtremes && points.length >= 1;
+  // Value labels (extremes) and date labels get their own reserved rows so
+  // they never land on the same baseline - a min point that happens to
+  // fall on the first/last day (as `steps`' partial "today" count often
+  // does) would otherwise draw its value directly on top of the date
+  // label at that same edge. See the dataviz skill's guidance against
+  // colliding direct labels.
+  const bottomDatePad = hasDateLabels ? 12 : 0;
+  const topValuePad = hasExtremeLabels ? 14 : 0;
+  const bottomValuePad = hasExtremeLabels ? 14 : 0;
+
   const min = Math.min(...points.map((p) => p.v));
   const max = Math.max(...points.map((p) => p.v));
   const range = max - min || 1;
   const innerW = width - padding * 2;
-  const innerH = height - padding * 2;
+  const innerH = height - padding * 2 - topValuePad - bottomValuePad - bottomDatePad;
   const n = values.length;
 
   const xFor = (i) => padding + (n <= 1 ? innerW / 2 : (i / (n - 1)) * innerW);
-  const yFor = (v) => padding + innerH - ((v - min) / range) * innerH;
+  const yFor = (v) => padding + topValuePad + innerH - ((v - min) / range) * innerH;
 
   ctx.strokeStyle = color;
   ctx.lineWidth = 2;
@@ -67,6 +99,46 @@ export function drawSparkline(canvas, values, { color = "#3b82f6", padding = 4 }
   ctx.beginPath();
   ctx.arc(xFor(last.i), yFor(last.v), 3, 0, Math.PI * 2);
   ctx.fill();
+
+  function alignFor(x) {
+    if (x < width * 0.15) return "left";
+    if (x > width * 0.85) return "right";
+    return "center";
+  }
+
+  if (labelExtremes) {
+    ctx.fillStyle = LABEL_COLOR;
+    ctx.font = LABEL_FONT;
+    if (points.length > 1) {
+      const maxPoint = points.reduce((a, b) => (b.v > a.v ? b : a));
+      const minPoint = points.reduce((a, b) => (b.v < a.v ? b : a));
+      ctx.textAlign = alignFor(xFor(maxPoint.i));
+      ctx.fillText(formatValue(maxPoint.v), xFor(maxPoint.i), yFor(maxPoint.v) - 5);
+      if (minPoint.i !== maxPoint.i) {
+        ctx.textAlign = alignFor(xFor(minPoint.i));
+        ctx.fillText(formatValue(minPoint.v), xFor(minPoint.i), yFor(minPoint.v) + 11);
+      }
+    } else {
+      // A single point has no trend to speak of - label it directly rather
+      // than leaving a bare dot with nothing but a duplicated date range.
+      ctx.textAlign = alignFor(xFor(points[0].i));
+      ctx.fillText(formatValue(points[0].v), xFor(points[0].i), yFor(points[0].v) - 5);
+    }
+  }
+
+  if (hasDateLabels) {
+    ctx.fillStyle = LABEL_COLOR;
+    ctx.font = LABEL_FONT;
+    if (labels[0] === labels[labels.length - 1]) {
+      ctx.textAlign = "center";
+      ctx.fillText(formatShortDate(labels[0]), width / 2, height - 2);
+    } else {
+      ctx.textAlign = "left";
+      ctx.fillText(formatShortDate(labels[0]), padding, height - 2);
+      ctx.textAlign = "right";
+      ctx.fillText(formatShortDate(labels[labels.length - 1]), width - padding, height - 2);
+    }
+  }
 }
 
 /**

@@ -20,5 +20,8 @@ export function renderHeartRate(container, records) {
   const canvas = document.createElement("canvas");
   canvas.className = "sparkline";
   container.appendChild(canvas);
-  drawSparkline(canvas, records.map((r) => r.resting), { color: "#dc2626" });
+  drawSparkline(canvas, records.map((r) => r.resting), {
+    color: "#dc2626",
+    labels: records.map((r) => r.date),
+  });
 }

@@ -18,5 +18,8 @@ export function renderSteps(container, records) {
   const canvas = document.createElement("canvas");
   canvas.className = "sparkline";
   container.appendChild(canvas);
-  drawSparkline(canvas, records.map((r) => r.value), { color: "#2563eb" });
+  drawSparkline(canvas, records.map((r) => r.value), {
+    color: "#2563eb",
+    labels: records.map((r) => r.date),
+  });
 }
