@@ -3,6 +3,7 @@ import { renderSteps } from "./components/steps-card.js";
 import { renderHeartRate } from "./components/heart-rate-card.js";
 import { renderSleep } from "./components/sleep-card.js";
 import { renderActivity } from "./components/activity-card.js";
+import { renderSimpleValueCard } from "./components/simple-value-card.js";
 
 const els = {
   form: document.getElementById("range-form"),
@@ -14,7 +15,22 @@ const els = {
   heartRate: document.getElementById("heart-rate-card-body"),
   sleep: document.getElementById("sleep-card-body"),
   activity: document.getElementById("activity-card-body"),
+  spo2: document.getElementById("spo2-card-body"),
+  hrv: document.getElementById("hrv-card-body"),
+  breathingRate: document.getElementById("breathing-rate-card-body"),
+  temperature: document.getElementById("temperature-card-body"),
+  weight: document.getElementById("weight-card-body"),
 };
+
+// Matches the per-metric styling used on each metric's own detail page
+// (js/pages/{spo2,hrv,breathing-rate,temperature,weight}.js).
+const SIMPLE_VALUE_METRICS = [
+  { key: "spo2", el: "spo2", unit: "%", color: "#0891b2", decimals: 1 },
+  { key: "hrv", el: "hrv", unit: " ms", color: "#9333ea", decimals: 1 },
+  { key: "breathing_rate", el: "breathingRate", unit: " br/min", color: "#0d9488", decimals: 1 },
+  { key: "temperature", el: "temperature", unit: "°C", color: "#ea580c", decimals: 2 },
+  { key: "weight", el: "weight", unit: " kg", color: "#4338ca", decimals: 1 },
+];
 
 function isoDate(d) {
   return d.toISOString().slice(0, 10);
@@ -46,6 +62,13 @@ async function loadDashboard(from, to) {
     renderHeartRate(els.heartRate, data.metrics.heart_rate);
     renderSleep(els.sleep, data.metrics.sleep);
     renderActivity(els.activity, data.metrics.activity);
+    for (const m of SIMPLE_VALUE_METRICS) {
+      renderSimpleValueCard(els[m.el], data.metrics[m.key] || [], {
+        unit: m.unit,
+        color: m.color,
+        decimals: m.decimals,
+      });
+    }
     setStatus(`Showing ${data.from} to ${data.to}`);
   } catch (err) {
     setStatus(`Failed to load: ${err.message}`, true);
