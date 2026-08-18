@@ -94,6 +94,27 @@ def _civil_value_to_date(value):
     return None
 
 
+def _local_date_from_utc(iso_str, offset_str):
+    """Converts a UTC "Z"-suffixed instant plus its sibling "<seconds>s"
+    utcOffset field (e.g. interval.startTime + interval.startUtcOffset) into
+    the local calendar date, per api-contract.md's "always local calendar
+    dates" convention. Naive [:10] truncation of the UTC string is wrong
+    whenever the instant falls near local midnight - see
+    docs/backend-architecture.md. Falls back to naive truncation if either
+    value isn't in the expected shape.
+    """
+    if not isinstance(iso_str, str):
+        return None
+    try:
+        instant = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
+    except ValueError:
+        return iso_str[:10] if len(iso_str) >= 10 else None
+    offset_seconds = 0
+    if isinstance(offset_str, str) and offset_str.endswith("s"):
+        offset_seconds = _to_number(offset_str[:-1]) or 0
+    return (instant + timedelta(seconds=offset_seconds)).date().isoformat()
+
+
 def _parse_duration_seconds(value):
     """Parses a duration string like "1813.200s" (as seen on
     exercise.activeDuration) into seconds, or None."""
@@ -124,13 +145,20 @@ def _reshape_heart_rate(points):
     """Approximates a daily "resting" value as the minimum bpm sample seen
     that day, since heart_rate is read as intraday samples, not a
     dedicated resting-heart-rate data type. Fields live under
-    heartRate.sampleTime.civilTime.date (preferred, local calendar date)
-    and heartRate.beatsPerMinute."""
+    heartRate.sampleTime.civilTime.date (preferred, already local) or
+    heartRate.sampleTime.physicalTime + .utcOffset (converted to local -
+    see _local_date_from_utc), and heartRate.beatsPerMinute."""
     by_date = {}
     for p in points:
-        heart_rate = p.get("heartRate") or {}
-        sample_time = heart_rate.get("sampleTime") or {}
-        d = _civil_value_to_date(sample_time.get("civilTime")) or _civil_value_to_date(sample_time.get("physicalTime"))
+        heart_rate = p.get("heartRate")
+        if not isinstance(heart_rate, dict):
+            continue
+        sample_time = heart_rate.get("sampleTime")
+        if not isinstance(sample_time, dict):
+            continue
+        d = _civil_value_to_date(sample_time.get("civilTime")) or _local_date_from_utc(
+            sample_time.get("physicalTime"), sample_time.get("utcOffset")
+        )
         bpm = _to_number(heart_rate.get("beatsPerMinute"))
         if d is None or bpm is None:
             continue
@@ -139,23 +167,33 @@ def _reshape_heart_rate(points):
 
 
 def _reshape_sleep(points):
-    """One record per sleep session, keyed by the date the session ended on
-    (sleep is fetched by civil_end_time - see docs/backend-architecture.md).
-    Fields live under sleep.interval, sleep.summary (minutesAsleep), and
+    """One record per sleep session, keyed by the local date the session
+    ended on (sleep is fetched by civil_end_time - see
+    docs/backend-architecture.md). Fields live under sleep.interval (paired
+    with sleep.interval.endUtcOffset/startUtcOffset - see
+    _local_date_from_utc), sleep.summary (minutesAsleep), and
     sleep.summary.stagesSummary (a list of {type, minutes, count} - types
     seen live: AWAKE, LIGHT, DEEP, REM). Stage durations default to 0 for
     any stage type absent from stagesSummary."""
     records = []
     for p in points:
-        sleep = p.get("sleep") or {}
-        interval = sleep.get("interval") or {}
-        d = _civil_value_to_date(interval.get("endTime")) or _civil_value_to_date(interval.get("startTime"))
+        sleep = p.get("sleep")
+        if not isinstance(sleep, dict):
+            continue
+        interval = sleep.get("interval")
+        if not isinstance(interval, dict):
+            continue
+        d = _local_date_from_utc(interval.get("endTime"), interval.get("endUtcOffset")) or _local_date_from_utc(
+            interval.get("startTime"), interval.get("startUtcOffset")
+        )
         if d is None:
             continue
         summary = sleep.get("summary") or {}
         duration = _to_number(summary.get("minutesAsleep")) or 0
         stages = {"light": 0, "deep": 0, "rem": 0, "awake": 0}
         for stage in summary.get("stagesSummary") or []:
+            if not isinstance(stage, dict):
+                continue
             key = str(stage.get("type", "")).lower()
             if key in stages:
                 stages[key] += _to_number(stage.get("minutes")) or 0
@@ -164,14 +202,22 @@ def _reshape_sleep(points):
 
 
 def _reshape_activity(points):
-    """Fields live under exercise.interval, exercise.exerciseType, and
+    """Fields live under exercise.interval (paired with
+    exercise.interval.startUtcOffset/endUtcOffset - see
+    _local_date_from_utc), exercise.exerciseType, and
     exercise.metricsSummary (caloriesKcal). Duration comes from
     exercise.activeDuration, a "<seconds>s" string."""
     by_date = {}
     for p in points:
-        exercise = p.get("exercise") or {}
-        interval = exercise.get("interval") or {}
-        d = _civil_value_to_date(interval.get("startTime")) or _civil_value_to_date(interval.get("endTime"))
+        exercise = p.get("exercise")
+        if not isinstance(exercise, dict):
+            continue
+        interval = exercise.get("interval")
+        if not isinstance(interval, dict):
+            continue
+        d = _local_date_from_utc(interval.get("startTime"), interval.get("startUtcOffset")) or _local_date_from_utc(
+            interval.get("endTime"), interval.get("endUtcOffset")
+        )
         if d is None:
             continue
         metrics_summary = exercise.get("metricsSummary") or {}
@@ -195,7 +241,14 @@ _RESHAPERS = {
 
 def _metric_records(data_store, metric, from_d, to_d):
     raw_points = data_store.get("metrics", {}).get(metric, [])
-    records = _RESHAPERS[metric](raw_points)
+    try:
+        records = _RESHAPERS[metric](raw_points)
+    except Exception:
+        # Defense in depth alongside the reshapers' own isinstance guards: an
+        # unforeseen payload shape degrades this metric to an empty list
+        # instead of a request-killing 500, per api-contract.md's "present
+        # but empty" convention.
+        return []
     return [r for r in records if _in_range(r["date"], from_d, to_d)]
 
 
