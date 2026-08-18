@@ -36,9 +36,9 @@ No framework, no build tooling (no React/Vite/TypeScript). Plain HTML/CSS/JS ser
 
 ## Scope for v1
 
-- [ ] Register a Google Health API app/project, get OAuth working
-- [ ] Pull a handful of data types to start: steps, heart rate, sleep, activity
-- [ ] Store fetched data in a local JSON file
+- [x] Register a Google Health API app/project, get OAuth working
+- [x] Pull a handful of data types to start: steps, heart rate, sleep, activity
+- [x] Store fetched data in a local JSON file
 - [ ] Small backend API (stdlib-only) to query stored data by date range / metric
 - [ ] Vanilla JS dashboard to view the data
 - [ ] Expand to more data types once the pipeline works end-to-end
@@ -47,16 +47,16 @@ No framework, no build tooling (no React/Vite/TypeScript). Plain HTML/CSS/JS ser
 
 - **Dashboard vs. multi-page site?** Leaning dashboard — a single view with multiple charts/widgets (today's snapshot, trends over time) feels more natural for health data than separate pages per metric. Could add dedicated pages per metric later if the dashboard gets crowded. See [`docs/frontend-architecture.md`](./docs/frontend-architecture.md).
 - **How much history to pull?** Need to check Google Health API rate limits and plan a backfill strategy for historical data vs. ongoing sync.
-- **Auth storage:** where/how to store OAuth tokens safely for a personal single-user project (a local, git-ignored JSON/config file, kept separate from the data-store JSON file).
+- **Auth storage:** where/how to store OAuth tokens safely for a personal single-user project (a local, git-ignored JSON/config file, kept separate from the data-store JSON file). **Resolved** — see [`google_health.md`](./google_health.md) step 7; `backend/config.json` (git-ignored) holds both credentials and tokens, `backend/config.json.example` documents the shape.
 - **JSON file growth:** if the data file grows large over time, may need to split by metric/month rather than one giant file — revisit once we see real data volume.
 - **Hosting:** run locally to start, or deploy somewhere? Not needed for v1.
 
 ## Next steps
 
-1. Follow [`google_health.md`](./google_health.md) to set up the Google Cloud project, OAuth consent screen, and credentials.
-2. Flesh out backend architecture — see [`docs/backend-architecture.md`](./docs/backend-architecture.md)
-3. Flesh out frontend architecture — see [`docs/frontend-architecture.md`](./docs/frontend-architecture.md)
-4. Backend/frontend build against the shared [`docs/api-contract.md`](./docs/api-contract.md) so neither side blocks on the other.
-5. Confirm the actual `arcgispro-py3` package list (`conda list`) and register a Google Health API app before building anything else out.
-6. Once code exists, follow [`docs/local-dev-setup.md`](./docs/local-dev-setup.md) for the day-to-day run loop (activate env, auth, sync, serve).
-7. Keep [`docs/privacy-and-data-handling.md`](./docs/privacy-and-data-handling.md) in mind whenever touching credentials or the data store — check `git status` before every commit that touches `backend/`.
+1. [x] Follow [`google_health.md`](./google_health.md) to set up the Google Cloud project, OAuth consent screen, and credentials.
+2. [x] Flesh out backend architecture — see [`docs/backend-architecture.md`](./docs/backend-architecture.md). `auth.py`/`sync.py`/`store.py`/`http_client.py`/`google_health_client.py` implement it and run end-to-end (`cli.py auth` and `cli.py sync` both verified against real data).
+3. [x] Flesh out frontend architecture — see [`docs/frontend-architecture.md`](./docs/frontend-architecture.md). Doc written; no frontend code yet (see "Scope for v1").
+4. [ ] Backend/frontend build against the shared [`docs/api-contract.md`](./docs/api-contract.md) so neither side blocks on the other. Backend side built; frontend not started.
+5. [ ] Confirm the actual `arcgispro-py3` package list (`conda list`) and register a Google Health API app before building anything else out. App registered and working; package list confirmed only indirectly, by `cli.py auth`/`sync` actually running successfully in that environment — no explicit `conda list` done.
+6. [ ] Once code exists, follow [`docs/local-dev-setup.md`](./docs/local-dev-setup.md) for the day-to-day run loop (activate env, auth, sync, serve). `auth` and `sync` work (via `backend/start-server.bat` / `backend/start-sync.bat`); `serve` doesn't exist yet.
+7. Keep [`docs/privacy-and-data-handling.md`](./docs/privacy-and-data-handling.md) in mind whenever touching credentials or the data store — check `git status` before every commit that touches `backend/`. (Ongoing practice, not a one-time step — this already caught a real credential-tracking mistake once, see `google_health.md` step 7.)
