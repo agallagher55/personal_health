@@ -10,6 +10,7 @@ frontend (docs/api-contract.md) happens in server.py at serve time, not
 here.
 """
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -49,4 +50,20 @@ def _point_key(point):
     # Daily-rollup points (see google_health_client._list_via_daily_rollup)
     # have neither - they're keyed by their civilStartTime instead, which
     # uniquely identifies the rolled-up day.
-    return point.get("name") or point.get("time") or json.dumps(point.get("civilStartTime"), sort_keys=True)
+    if point.get("name"):
+        return point["name"]
+    if point.get("time"):
+        return point["time"]
+    if point.get("civilStartTime"):
+        return json.dumps(point["civilStartTime"], sort_keys=True)
+    # heart_rate points have none of the above - every field (sampleTime,
+    # beatsPerMinute) lives nested under "heartRate" instead. Falling back to
+    # json.dumps(None) here used to produce the same "null" key for every
+    # heart_rate point, so add_data_points() treated every sample after the
+    # first in a sync as a duplicate and silently discarded it - a real
+    # sync only ever kept 1 heart_rate point total, no matter how many
+    # samples the API actually returned. Hash the whole point instead: two
+    # points with identical content dedupe (correct - they're the same
+    # sample), and any content difference (a different sampleTime, a
+    # different bpm) produces a different key.
+    return hashlib.sha256(json.dumps(point, sort_keys=True).encode("utf-8")).hexdigest()
