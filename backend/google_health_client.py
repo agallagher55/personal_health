@@ -87,17 +87,20 @@ DATA_TYPES = {
         "page_size": 10000,
     },
     "breathing_rate": {
-        # ghealth registry: id "daily-respiratory-rate". Confirmed live
-        # 2026-08-19: the plain list endpoint 400s outright for this type
-        # (not just empty results, like steps' quirk) - the "daily-" prefix
-        # was right that this is rollup-only. filter_field/time_kind are
-        # unused for daily_rollup but kept for reference/consistency, same
-        # as steps.
+        # ghealth registry: id "daily-respiratory-rate". The "daily-" prefix
+        # turned out to be misleading: confirmed live 2026-08-19 that
+        # dailyRollUp is explicitly NOT supported for this type (400,
+        # UNSUPPORTED_DATA_TYPE_ACTION - "the following actions are
+        # supported: list, reconcile"), unlike steps' quirk which was the
+        # opposite (list works but returns nothing; dailyRollUp is where the
+        # real data is). So this needs the plain list endpoint after all -
+        # its original 400 (before http_client surfaced response bodies)
+        # was most likely a wrong filter_field, not a wrong endpoint. Not
+        # yet reverified live with the body-surfacing fix in place.
         "api_id": "daily-respiratory-rate",
         "filter_field": "daily_respiratory_rate.interval.civil_start_time",
         "time_kind": "civil",
         "page_size": 10000,
-        "read_method": "daily_rollup",
     },
     "temperature": {
         # ghealth registry: id "core-body-temperature", sample-based (physical time).
