@@ -40,8 +40,8 @@ backend/
 ├── google_health_client.py  # thin wrapper over Google Health API reads (implemented)
 ├── store.py                  # read/write helpers for the JSON data store (implemented)
 ├── sync.py                   # orchestrates pulling data and writing it to the store (implemented)
-├── server.py                # stdlib http.server-based query API (not yet built)
-└── cli.py                    # entry point: `python cli.py auth|sync|serve`
+├── server.py                # stdlib http.server-based query API (implemented)
+└── cli.py                    # entry point: `python cli.py auth|sync|serve` (implemented)
 ```
 
 ## Calling the Google Health API
@@ -115,9 +115,36 @@ Revisit (e.g. split into one JSON file per metric) only if a single file becomes
 5. SpO2, HRV, breathing rate, temperature (if available) — not yet added
 6. Body (weight, BMI) if logged — not yet added
 
+## Query API (`server.py`)
+
+Implements `docs/api-contract.md` exactly: `GET /api/health`, `GET /api/metrics`,
+`GET /api/metrics/{metric}`, `POST /api/sync`, plus serving `frontend/` as
+static files (so `python cli.py serve` is the only process needed for local
+dev — see `docs/local-dev-setup.md`). Built on `ThreadingHTTPServer` /
+`BaseHTTPRequestHandler`, no third-party framework. CORS is wide open
+(`Access-Control-Allow-Origin: *`) since this only ever runs on localhost.
+
+**Reshaping raw store points into the contract's per-metric shapes is only
+fully verified for `steps`** (the `dailyRollUp` shape confirmed live above).
+`heart_rate`, `sleep`, and `activity` go through defensive `_extract_*`
+helpers in `server.py` that try a few plausible field paths based on the
+partial live confirmations noted above (bpm-style fields, `exerciseType`/
+`metricsSummary`, etc.) and silently skip points they can't parse, rather
+than guessing wrong and mislabeling data. In particular:
+- `heart_rate`'s daily "resting" value is currently approximated as the
+  **minimum bpm sample seen that day** — the API's `heart-rate` data type is
+  intraday samples, not a dedicated resting-heart-rate metric. Revisit if
+  a real resting-heart-rate data type/bundle turns out to exist.
+- `sleep` stage durations default to `0` rather than being confirmed against
+  a real stage sub-record shape.
+
+**Re-verify these against a real `backend/data/health_data.json` from a live
+sync** (this doc's assumptions were written without one available) and
+tighten `server.py`'s extraction helpers accordingly once done.
+
 ## Open questions
 
 - Whether `requests` is actually present in `arcgispro-py3` — if not, `http_client.py` already falls back to `urllib.request` automatically.
-- The exact per-data-type payload schema for `server.py` to reshape for the frontend — real examples now seen live for `steps` (daily rollup), `heart_rate`, `sleep` (with `shortAwakenings` sub-records), and `exercise` (with `metricsSummary`/`heartRateZoneDurations`); still worth a closer look once `server.py` is actually built, since only one week of one account's data has been observed.
+- The exact per-data-type payload schema for `heart_rate`/`sleep`/`activity` reshaping in `server.py` — see "Query API" above.
 - Whether other data types beyond `steps` (SpO2, HRV, body/weight, once added) also need the `daily_rollup` read path instead of plain list — check the same way `steps` was diagnosed rather than assuming list works.
 - Any request rate limits/quotas specific to the Google Health API's REST endpoints — not yet hit in testing since all client testing so far has been against mocks except for the one-off live diagnosis above, not a full sync.
