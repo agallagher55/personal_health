@@ -78,15 +78,15 @@ Data type IDs currently mapped in `google_health_client.DATA_TYPES` (our metric 
 | `heart_rate` | `heart-rate` | `heart_rate.sample_time.physical_time` | physical | list | verified live |
 | `sleep` | `sleep` | `sleep.interval.civil_end_time` (note: **end** time, the one exception) | civil | list | verified live — real sleep sessions returned |
 | `activity` | `exercise` | `exercise.interval.civil_start_time` | civil | list | verified live — a real logged workout returned |
-| `spo2` | `oxygen-saturation` | `oxygen_saturation.sample_time.physical_time` | physical | list | **unverified** — added 2026-08-18 from the `ghealth` CLI registry, not a live sync |
-| `hrv` | `heart-rate-variability` | `heart_rate_variability.sample_time.physical_time` | physical | list | **unverified** — same as above |
-| `breathing_rate` | `daily-respiratory-rate` | `daily_respiratory_rate.interval.civil_start_time` | civil | list | **unverified** — the `daily-` id prefix suggests this may need `daily_rollup` instead, like `steps` did; not yet checked |
-| `temperature` | `core-body-temperature` | `core_body_temperature.sample_time.physical_time` | physical | list | **unverified** — same as spo2/hrv |
-| `weight` | `weight` | `weight.sample_time.physical_time` | physical | list | **unverified** — same as spo2/hrv |
+| `spo2` | `oxygen-saturation` | `oxygen_saturation.sample_time.physical_time` | physical | list | verified live — real values rendering correctly (2026-08-19) |
+| `hrv` | `heart-rate-variability` | `heart_rate_variability.sample_time.physical_time` | physical | list | verified live — see reshaping note below (the value field name needed a fix) |
+| `breathing_rate` | `daily-respiratory-rate` | `daily_respiratory_rate.date` | `civil_date` (bare date, no time) | list | **unverified, 3rd attempt** — first two guesses (`dailyRollUp`; `.interval.civil_start_time`) were confirmed wrong live; this one's field path comes from the `ghealth` registry's actual `TimeFieldDaily` → `.date` mapping, not yet retested |
+| `temperature` | `core-body-temperature` | `core_body_temperature.sample_time.physical_time` | physical | list | **unverified** — no data synced yet to check against (account may not have this data type) |
+| `weight` | `weight` | `weight.sample_time.physical_time` | physical | list | verified live — real values rendering correctly (2026-08-19) |
 
 Both `sleep`/`activity` confirmed live (same 2026-08-17 session as the `steps` diagnosis above) — the plain list endpoint returns real records for both on this account/device, so neither needs the `daily_rollup` workaround `steps` does.
 
-The five newest entries (`spo2`, `hrv`, `breathing_rate`, `temperature`, `weight`) are **not yet verified against a live sync** — `developers.google.com` is unreachable from this environment (same issue noted for the original four), so their `api_id`/`filter_field` values are inferred from the open-source [`ghealth` CLI](https://github.com/Google-Health-API/google-health-cli)'s type registry (`pkg/types/registry.go`), the same secondary source the original four types were cross-checked against before being confirmed live. `server.py`'s reshapers for these five are correspondingly best-effort guesses at the nested payload field names (see its docstrings) and may return empty results even with real underlying data until checked against an actual `backend/data/health_data.json` from a live sync. If a sync comes back empty for one of these, diagnose it the same way `steps` was (try the `dailyRollUp` endpoint via curl/OAuth Playground) before assuming there's no data.
+`spo2`, `hrv`, and `weight` are now confirmed live (2026-08-19) — real data synced and rendered correctly on the dashboard. `breathing_rate` took three attempts to even get a data type ID Google would accept a request for at all (see its confidence note above); `temperature` hasn't synced any data yet, so its field names are still an open guess. `server.py`'s reshapers for `breathing_rate`/`temperature` remain best-effort until confirmed the same way `hrv` was.
 
 ## JSON data store shape
 
@@ -159,18 +159,21 @@ parse rather than raising, so a future account/device with a differently
 shaped payload degrades to "fewer/empty records" instead of a 500 — but the
 field paths themselves are no longer guesses.
 
-**`spo2`, `hrv`, `breathing_rate`, `temperature`, and `weight` are the
-exception** — their `_reshape_*` functions (added 2026-08-18) are still
-guesses, not confirmed field paths, mirroring where `heart_rate`/`sleep`/
-`activity` started before the fix above. `_reshape_sample_series()` is the
-shared helper for the four sample-based ones (spo2/hrv/temperature/weight);
-`_reshape_breathing_rate()` is separate since that type is civil/daily.
-Re-verify all five against a real sync's `health_data.json` and tighten them
-the same way the original four were tightened.
+**`spo2`, `hrv`, and `weight` were the same kind of guess** (added
+2026-08-18) that `heart_rate`/`sleep`/`activity` started as, and are now
+similarly confirmed live (2026-08-19): `_reshape_sample_series()`'s nested-
+key/`sampleTime` guess was right for all three, out of the box, for `spo2`
+and `weight`. `hrv` needed one fix — the value field is
+`rootMeanSquareOfSuccessiveDifferencesMilliseconds`, not the
+`rmssdMillis`/`rmssd`/`value` guesses it started with (those stayed as
+trailing fallbacks). **`breathing_rate` and `temperature` are still
+unconfirmed** — `_reshape_breathing_rate()` is a separate function since
+that type is civil/daily rather than sample-based, and `_reshape_temperature`
+hasn't had any real data to check its field-name guesses against yet.
 
 ## Open questions
 
 - Whether `requests` is actually present in `arcgispro-py3` — if not, `http_client.py` already falls back to `urllib.request` automatically.
-- The exact per-data-type payload schema for `spo2`/`hrv`/`breathing_rate`/`temperature`/`weight` reshaping in `server.py` — see "Query API" above. (`heart_rate`/`sleep`/`activity` went through this same unverified state before being confirmed live.)
-- Whether `breathing_rate` needs the `daily_rollup` read path instead of plain list, given its `daily-respiratory-rate` API id — check the same way `steps` was diagnosed rather than assuming list works.
+- The exact per-data-type payload schema for `breathing_rate`/`temperature` reshaping in `server.py` — see "Query API" above. (`heart_rate`/`sleep`/`activity`/`spo2`/`hrv`/`weight` all went through this same unverified state before being confirmed live.)
+- Whether `breathing_rate`'s data type ID/filter field is even right yet — two guesses have been confirmed wrong live so far (see the data type table above); a third is pushed but not retested.
 - Any request rate limits/quotas specific to the Google Health API's REST endpoints — not yet hit in testing since all client testing so far has been against mocks except for the one-off live diagnosis above, not a full sync.

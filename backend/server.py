@@ -272,10 +272,17 @@ def _reshape_spo2(points):
 
 
 def _reshape_hrv(points):
-    """UNVERIFIED - guesses "heartRateVariability" with an RMSSD-style
-    reading (per the ghealth CLI registry's description). Averages
-    same-day samples."""
-    by_date = _reshape_sample_series(points, "heartRateVariability", ["rmssdMillis", "rmssd", "value"])
+    """Confirmed live 2026-08-19: nests under "heartRateVariability" with
+    "sampleTime" as guessed, but the value field is
+    "rootMeanSquareOfSuccessiveDifferencesMilliseconds" (a plain float, not
+    a string), not the "rmssdMillis"/"rmssd"/"value" guesses this started
+    with - those stayed as trailing fallbacks in case a different account/
+    device emits a shorter field name. Averages same-day samples."""
+    by_date = _reshape_sample_series(
+        points,
+        "heartRateVariability",
+        ["rootMeanSquareOfSuccessiveDifferencesMilliseconds", "rmssdMillis", "rmssd", "value"],
+    )
     return [{"date": d, "value": round(sum(v) / len(v), 1)} for d, v in sorted(by_date.items())]
 
 
