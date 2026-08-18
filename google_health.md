@@ -63,6 +63,16 @@ Google provides a codelab for this — do it once by hand to confirm the project
 
 If this step works, credentials/scopes/consent screen are all wired up correctly and the backend auth code (see [`docs/backend-architecture.md`](./docs/backend-architecture.md)) just needs to automate the same flow.
 
+**Troubleshooting: `Access blocked... doesn't comply with Google's OAuth 2.0 policy` from your own backend, even though the Playground worked** — if the Playground succeeds but `python cli.py auth` later gets blocked with `Error 400: invalid_request` / "doesn't comply with Google's OAuth 2.0 policy for keeping apps secure," even after confirming `redirect_uri` in `backend/config.json` matches an Authorized redirect URI in the Cloud Console character-for-character, check the *type* of that value, not just its text. It must be a plain JSON **string**:
+```
+"redirect_uri": "http://localhost:8000/oauth/callback"
+```
+not a single-item **array** left over from copy-pasting the `redirect_uris` key out of Google's downloaded credentials JSON:
+```
+"redirect_uri": ["http://localhost:8000/oauth/callback"]
+```
+`auth.py` builds the authorization URL with Python's `urlencode()`, which silently stringifies a list value into `['http://localhost:8000/oauth/callback']` — that mangled, bracket-and-quote-laden string then gets percent-encoded into the request's `redirect_uri` parameter, matching nothing registered in the Cloud Console, and Google returns this generic policy-sounding error instead of a clear `redirect_uri_mismatch`. To confirm, look at the full authorization URL `auth.py` prints to the terminal before opening the browser and decode the `redirect_uri=` value — if it starts with `%5B%27` (`['`), this is the bug.
+
 ## 7. Store credentials safely (local, git-ignored)
 
 - Save the OAuth Client ID/Secret (and later, the refresh token) in a local config file — e.g. `backend/config.json` — **not** in `README.md`, `planning.md`, or any committed source file.
