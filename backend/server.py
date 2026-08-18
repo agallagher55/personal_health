@@ -303,11 +303,15 @@ def _reshape_weight(points):
 
 
 def _reshape_breathing_rate(points):
-    """UNVERIFIED - api_id "daily-respiratory-rate" is civil/daily (unlike
-    the other four new metrics), so its payload shape is guessed rather
-    than following _reshape_sample_series: tries a flat dailyRollUp-style
-    civilStartTime + a "dailyRespiratoryRate" payload first, falling back
-    to a nested sampleTime shape like the sample-based metrics above."""
+    """Confirmed live 2026-08-19 that this type is dailyRollUp-only (the
+    plain list endpoint 400s outright) - see google_health_client.DATA_TYPES.
+    Points are flat, like steps': top-level civilStartTime/civilEndTime.
+    The rollup payload's own field name is still UNVERIFIED though - tries a
+    "dailyRespiratoryRate" key (steps' rollup payload key matched its plain
+    api_id "steps" exactly; this guesses the camelCase-of-hyphenated-id
+    pattern the list-endpoint types follow instead, since "daily-respiratory-
+    rate" itself would be an unusual JSON key). Falls back to a nested
+    sampleTime shape in case the rollup response isn't flat after all."""
     by_date = {}
     for p in points:
         d = _civil_value_to_date(p.get("civilStartTime")) or _civil_value_to_date(p.get("civilEndTime"))
@@ -430,15 +434,21 @@ class Handler(BaseHTTPRequestHandler):
 
     def _handle_sync(self):
         try:
-            results = sync.sync_all()
-        except Exception as exc:  # noqa: BLE001 - surfaced to the caller as a 502
+            results, errors = sync.sync_all()
+        except Exception as exc:  # noqa: BLE001 - a failure before per-metric isolation (e.g. auth) - surfaced as a 502
             self._send_error_json(502, f"sync failed: {exc}")
             return
-        self._send_json(200, {
+        body = {
             "status": "ok",
             "synced": results,
             "synced_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
-        })
+        }
+        # One or more metrics failing (see sync.sync_all()) is still a 200 -
+        # the metrics that did succeed were genuinely synced and saved: not
+        # reporting that as an error. `errors` carries which metrics didn't.
+        if errors:
+            body["errors"] = errors
+        self._send_json(200, body)
 
     # -- dispatch -----------------------------------------------------------
 

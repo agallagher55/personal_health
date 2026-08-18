@@ -87,15 +87,17 @@ DATA_TYPES = {
         "page_size": 10000,
     },
     "breathing_rate": {
-        # ghealth registry: id "daily-respiratory-rate" - the "daily-" prefix
-        # suggests (unconfirmed) this type is rollup-only, similar to how
-        # `steps` needed daily_rollup for this project's specific device -
-        # see the module docstring. If a sync comes back empty, try switching
-        # read_method to "daily_rollup" the same way steps was fixed.
+        # ghealth registry: id "daily-respiratory-rate". Confirmed live
+        # 2026-08-19: the plain list endpoint 400s outright for this type
+        # (not just empty results, like steps' quirk) - the "daily-" prefix
+        # was right that this is rollup-only. filter_field/time_kind are
+        # unused for daily_rollup but kept for reference/consistency, same
+        # as steps.
         "api_id": "daily-respiratory-rate",
         "filter_field": "daily_respiratory_rate.interval.civil_start_time",
         "time_kind": "civil",
         "page_size": 10000,
+        "read_method": "daily_rollup",
     },
     "temperature": {
         # ghealth registry: id "core-body-temperature", sample-based (physical time).

@@ -100,7 +100,17 @@ Triggers an on-demand pull from the Google Health API into the JSON data store (
 }
 ```
 
-**Response `502`** (Google Health API call failed — e.g. token expired and refresh failed):
+**Response `200`, one or more metrics failed** (e.g. a data type whose read method turns out to be wrong for this account — see `docs/backend-architecture.md`'s per-metric "Confidence" notes): the metrics that succeeded were genuinely synced and saved, so this is still `200`, not an error — `errors` names which metrics didn't and why. That metric's `last_synced` isn't advanced, so the same range is retried on the next sync.
+```json
+{
+  "status": "ok",
+  "synced": { "steps": 7, "heart_rate": 7, "sleep": 6, "activity": 3, "spo2": 5 },
+  "errors": { "breathing_rate": "400 Client Error: Bad Request for url: ..." },
+  "synced_at": "2026-08-17T09:12:00Z"
+}
+```
+
+**Response `502`** (the sync couldn't start at all — e.g. token expired and refresh failed):
 ```json
 { "error": "sync failed: <reason>" }
 ```
