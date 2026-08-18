@@ -12,7 +12,10 @@ function renderChart(canvas, records) {
   const totals = records.map((r) =>
     r.exercises.reduce((sum, ex) => sum + (typeof ex.duration_minutes === "number" ? ex.duration_minutes : 0), 0)
   );
-  drawSparkline(canvas, totals, { color: "#16a34a" });
+  drawSparkline(canvas, totals, {
+    color: "#16a34a",
+    labels: records.map((r) => r.date),
+  });
 }
 
 function renderTable(tbody, records) {

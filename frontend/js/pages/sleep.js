@@ -2,7 +2,10 @@ import { initMetricDetailPage } from "./metric-detail.js";
 import { drawSparkline } from "../charts.js";
 
 function renderChart(canvas, records) {
-  drawSparkline(canvas, records.map((r) => r.duration_minutes), { color: "#7c3aed" });
+  drawSparkline(canvas, records.map((r) => r.duration_minutes), {
+    color: "#7c3aed",
+    labels: records.map((r) => r.date),
+  });
 }
 
 function formatDuration(minutes) {

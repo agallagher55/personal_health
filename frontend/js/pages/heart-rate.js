@@ -2,7 +2,10 @@ import { initMetricDetailPage } from "./metric-detail.js";
 import { drawSparkline } from "../charts.js";
 
 function renderChart(canvas, records) {
-  drawSparkline(canvas, records.map((r) => r.resting), { color: "#dc2626" });
+  drawSparkline(canvas, records.map((r) => r.resting), {
+    color: "#dc2626",
+    labels: records.map((r) => r.date),
+  });
 }
 
 function renderTable(tbody, records) {
