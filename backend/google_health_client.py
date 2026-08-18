@@ -87,19 +87,26 @@ DATA_TYPES = {
         "page_size": 10000,
     },
     "breathing_rate": {
-        # ghealth registry: id "daily-respiratory-rate". The "daily-" prefix
-        # turned out to be misleading: confirmed live 2026-08-19 that
-        # dailyRollUp is explicitly NOT supported for this type (400,
-        # UNSUPPORTED_DATA_TYPE_ACTION - "the following actions are
-        # supported: list, reconcile"), unlike steps' quirk which was the
-        # opposite (list works but returns nothing; dailyRollUp is where the
-        # real data is). So this needs the plain list endpoint after all -
-        # its original 400 (before http_client surfaced response bodies)
-        # was most likely a wrong filter_field, not a wrong endpoint. Not
-        # yet reverified live with the body-surfacing fix in place.
+        # ghealth registry: id "daily-respiratory-rate". Two things confirmed
+        # live 2026-08-19: (1) dailyRollUp is explicitly NOT supported for
+        # this type (400, UNSUPPORTED_DATA_TYPE_ACTION - "the following
+        # actions are supported: list, reconcile") - list is correct, unlike
+        # steps' quirk which needed dailyRollUp instead. (2) the original
+        # filter_field guess, "daily_respiratory_rate.interval.civil_start_
+        # time", is flatly rejected: "Member ... is not supported for
+        # filtering" - this type has no `interval` sub-message. Re-checked
+        # the ghealth registry source directly (not just the earlier
+        # secondary summary) for its TimeField-to-filter-path mapping: a
+        # "daily" TimeField (which is what this type has, vs. "sample" for
+        # the four physical-time types above) maps to a bare `.date` suffix,
+        # not `.interval.civil_start_time`. Switched to that - see the
+        # "civil_date" time_kind in _build_filter(). Still UNVERIFIED
+        # against a live response (this is a third guess after two
+        # confirmed-wrong ones) - if this also 400s, the error should at
+        # least point at what actually is expected next.
         "api_id": "daily-respiratory-rate",
-        "filter_field": "daily_respiratory_rate.interval.civil_start_time",
-        "time_kind": "civil",
+        "filter_field": "daily_respiratory_rate.date",
+        "time_kind": "civil_date",
         "page_size": 10000,
     },
     "temperature": {
@@ -129,6 +136,13 @@ def _build_filter(filter_field, time_kind, from_date, to_date):
     if time_kind == "civil":
         start_str = start.strftime("%Y-%m-%dT00:00:00")
         end_str = end.strftime("%Y-%m-%dT00:00:00")
+    elif time_kind == "civil_date":
+        # UNVERIFIED (see breathing_rate's DATA_TYPES entry): a bare
+        # "YYYY-MM-DD" value, not a datetime, for data types whose filter
+        # field is a plain google.type.Date (e.g. "{name}.date") rather than
+        # an interval/sample_time sub-message.
+        start_str = start.strftime("%Y-%m-%d")
+        end_str = end.strftime("%Y-%m-%d")
     else:
         start_str = start.strftime("%Y-%m-%dT00:00:00Z")
         end_str = end.strftime("%Y-%m-%dT00:00:00Z")
