@@ -4,6 +4,7 @@ import { renderHeartRate } from "./components/heart-rate-card.js";
 import { renderSleep } from "./components/sleep-card.js";
 import { renderActivity } from "./components/activity-card.js";
 import { renderSimpleValueCard } from "./components/simple-value-card.js";
+import { renderWeightCard } from "./components/weight-card.js";
 
 const els = {
   form: document.getElementById("range-form"),
@@ -23,13 +24,14 @@ const els = {
 };
 
 // Matches the per-metric styling used on each metric's own detail page
-// (js/pages/{spo2,hrv,breathing-rate,temperature,weight}.js).
+// (js/pages/{spo2,hrv,breathing-rate,temperature}.js). `weight` is handled
+// separately below via renderWeightCard, since it's the only one with a
+// unit toggle (kg/lbs).
 const SIMPLE_VALUE_METRICS = [
   { key: "spo2", el: "spo2", unit: "%", color: "#0891b2", decimals: 1 },
   { key: "hrv", el: "hrv", unit: " ms", color: "#9333ea", decimals: 1 },
   { key: "breathing_rate", el: "breathingRate", unit: " br/min", color: "#0d9488", decimals: 1 },
   { key: "temperature", el: "temperature", unit: "°C", color: "#ea580c", decimals: 2 },
-  { key: "weight", el: "weight", unit: " kg", color: "#4338ca", decimals: 1 },
 ];
 
 function isoDate(d) {
@@ -69,6 +71,7 @@ async function loadDashboard(from, to) {
         decimals: m.decimals,
       });
     }
+    renderWeightCard(els.weight, data.metrics.weight || []);
     setStatus(`Showing ${data.from} to ${data.to}`);
   } catch (err) {
     setStatus(`Failed to load: ${err.message}`, true);
