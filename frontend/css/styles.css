@@ -33,6 +33,7 @@ h1 {
   justify-content: space-between;
   gap: 1rem;
   margin-bottom: 0.5rem;
+  padding-bottom: 1.1rem;
 }
 
 .range-controls {
@@ -84,9 +85,16 @@ h1 {
   color: #fff;
 }
 
+.sync-wrap {
+  position: relative;
+}
+
 .last-synced {
-  flex-basis: 100%;
-  text-align: right;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 0.25rem;
+  white-space: nowrap;
   font-size: 0.75rem;
   color: var(--text-muted);
 }
