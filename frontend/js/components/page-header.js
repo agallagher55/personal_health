@@ -10,7 +10,7 @@ export function renderPageHeader(container, { title, showSync = false } = {}) {
       <label>To <input type="date" id="range-to" /></label>
       <button type="submit" id="range-apply">Apply</button>
       ${showSync ? `
-      <span class="sync-control">
+      <span class="sync-wrap">
         <button type="button" id="sync-now">Sync now</button>
         <span id="last-synced" class="last-synced"></span>
       </span>` : ""}
