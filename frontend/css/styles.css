@@ -209,6 +209,37 @@ canvas.stacked-bar {
   color: var(--text-muted);
 }
 
+.unit-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 0.6rem;
+}
+
+.unit-toggle button {
+  font: inherit;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.6rem;
+  border: none;
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.unit-toggle button + button {
+  border-left: 1px solid var(--border);
+}
+
+.unit-toggle button.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.unit-toggle button:hover:not(.active) {
+  color: var(--text);
+}
+
 .back-link {
   display: inline-block;
   margin-bottom: 1rem;
