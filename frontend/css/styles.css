@@ -199,6 +199,9 @@ canvas.stacked-bar {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
+  max-height: 260px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .activity-list li {

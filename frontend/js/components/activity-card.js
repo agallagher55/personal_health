@@ -30,7 +30,7 @@ export function renderActivity(container, records) {
 
   const list = document.createElement("ul");
   list.className = "activity-list";
-  for (const ex of flattened.slice(0, 8)) {
+  for (const ex of flattened) {
     const item = document.createElement("li");
 
     const info = document.createElement("div");
