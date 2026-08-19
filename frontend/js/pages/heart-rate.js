@@ -21,4 +21,4 @@ function renderTable(tbody, records) {
   }
 }
 
-initMetricDetailPage("heart_rate", { renderChart, renderTable });
+initMetricDetailPage("heart_rate", { title: "Resting Heart Rate", renderChart, renderTable });

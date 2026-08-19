@@ -55,4 +55,4 @@ for (const btn of document.querySelectorAll("#unit-toggle button")) {
   });
 }
 
-initMetricDetailPage("weight", { renderChart, renderTable });
+initMetricDetailPage("weight", { title: "Weight", renderChart, renderTable });

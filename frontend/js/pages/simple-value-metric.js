@@ -5,7 +5,7 @@ import { drawSparkline } from "../charts.js";
 // (spo2, hrv, breathing_rate, temperature, weight) - see
 // components/simple-value-card.js for why one generic implementation
 // covers all five instead of five near-duplicate page scripts.
-export function initSimpleValueDetailPage(metric, { unit = "", color = "#2563eb", decimals = 0 } = {}) {
+export function initSimpleValueDetailPage(metric, { title, unit = "", color = "#2563eb", decimals = 0 } = {}) {
   function renderChart(canvas, records) {
     drawSparkline(canvas, records.map((r) => r.value), {
       color,
@@ -26,5 +26,5 @@ export function initSimpleValueDetailPage(metric, { unit = "", color = "#2563eb"
     }
   }
 
-  initMetricDetailPage(metric, { renderChart, renderTable });
+  initMetricDetailPage(metric, { title, renderChart, renderTable });
 }

@@ -21,4 +21,4 @@ function renderTable(tbody, records) {
   }
 }
 
-initMetricDetailPage("steps", { renderChart, renderTable });
+initMetricDetailPage("steps", { title: "Steps", renderChart, renderTable });
