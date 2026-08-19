@@ -3,7 +3,10 @@ import { drawSparkline } from "../charts.js";
 
 function formatType(type) {
   if (!type) return "Activity";
-  return type.charAt(0) + type.slice(1).toLowerCase();
+  return type
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 // One record per day with multiple exercises - chart the day's total active

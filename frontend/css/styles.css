@@ -84,6 +84,18 @@ h1 {
   color: #fff;
 }
 
+.sync-control {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.last-synced {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
 .status {
   min-height: 1.2rem;
   margin: 0 0 1.25rem;
@@ -188,8 +200,10 @@ canvas.stacked-bar {
 
 .activity-list li {
   display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
   padding-bottom: 0.5rem;
   border-bottom: 1px solid var(--border);
 }
@@ -197,6 +211,12 @@ canvas.stacked-bar {
 .activity-list li:last-child {
   border-bottom: none;
   padding-bottom: 0;
+}
+
+.activity-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
 }
 
 .activity-type {
@@ -207,6 +227,13 @@ canvas.stacked-bar {
 .activity-meta {
   font-size: 0.8rem;
   color: var(--text-muted);
+}
+
+.activity-date {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  text-align: right;
 }
 
 .unit-toggle {
