@@ -1,6 +1,9 @@
 function formatType(type) {
   if (!type) return "Activity";
-  return type.charAt(0) + type.slice(1).toLowerCase();
+  return type
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 // `records` is docs/api-contract.md's activity shape:
@@ -30,18 +33,34 @@ export function renderActivity(container, records) {
   for (const ex of flattened.slice(0, 8)) {
     const item = document.createElement("li");
 
+    const info = document.createElement("div");
+    info.className = "activity-info";
+
     const type = document.createElement("span");
     type.className = "activity-type";
     type.textContent = formatType(ex.type);
-    item.appendChild(type);
+    info.appendChild(type);
 
-    const meta = document.createElement("span");
-    meta.className = "activity-meta";
-    const parts = [ex.date];
-    if (typeof ex.duration_minutes === "number") parts.push(`${ex.duration_minutes} min`);
-    if (typeof ex.calories === "number") parts.push(`${ex.calories} cal`);
-    meta.textContent = parts.join(" · ");
-    item.appendChild(meta);
+    if (typeof ex.duration_minutes === "number") {
+      const duration = document.createElement("span");
+      duration.className = "activity-meta";
+      duration.textContent = `${ex.duration_minutes} min`;
+      info.appendChild(duration);
+    }
+
+    if (typeof ex.calories === "number") {
+      const calories = document.createElement("span");
+      calories.className = "activity-meta";
+      calories.textContent = `${ex.calories} cal`;
+      info.appendChild(calories);
+    }
+
+    item.appendChild(info);
+
+    const date = document.createElement("span");
+    date.className = "activity-date";
+    date.textContent = ex.date;
+    item.appendChild(date);
 
     list.appendChild(item);
   }

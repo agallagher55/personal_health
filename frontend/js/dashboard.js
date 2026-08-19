@@ -1,4 +1,4 @@
-import { getMetrics, triggerSync } from "./api.js";
+import { getHealth, getMetrics, triggerSync } from "./api.js";
 import { renderSteps } from "./components/steps-card.js";
 import { renderHeartRate } from "./components/heart-rate-card.js";
 import { renderSleep } from "./components/sleep-card.js";
@@ -11,6 +11,7 @@ const els = {
   from: document.getElementById("range-from"),
   to: document.getElementById("range-to"),
   sync: document.getElementById("sync-now"),
+  lastSynced: document.getElementById("last-synced"),
   status: document.getElementById("status"),
   steps: document.getElementById("steps-card-body"),
   heartRate: document.getElementById("heart-rate-card-body"),
@@ -51,6 +52,27 @@ function setStatus(message, isError = false) {
   els.status.classList.toggle("status-error", isError);
 }
 
+function setLastSynced(isoTimestamp) {
+  els.lastSynced.textContent = `Last synced: ${formatRelativeTime(isoTimestamp)}`;
+}
+
+function formatRelativeTime(isoTimestamp) {
+  if (!isoTimestamp) return "never";
+
+  const diffSeconds = Math.round((Date.now() - new Date(isoTimestamp).getTime()) / 1000);
+  if (diffSeconds < 5) return "just now";
+  if (diffSeconds < 60) return `${diffSeconds}s ago`;
+
+  const diffMinutes = Math.round(diffSeconds / 60);
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+
+  const diffDays = Math.round(diffHours / 24);
+  return `${diffDays}d ago`;
+}
+
 function currentRange() {
   const fallback = defaultRange();
   return { from: els.from.value || fallback.from, to: els.to.value || fallback.to };
@@ -75,6 +97,15 @@ async function loadDashboard(from, to) {
     setStatus(`Showing ${data.from} to ${data.to}`);
   } catch (err) {
     setStatus(`Failed to load: ${err.message}`, true);
+  }
+}
+
+async function loadLastSynced() {
+  try {
+    const health = await getHealth();
+    setLastSynced(health.data_store_last_modified);
+  } catch (err) {
+    els.lastSynced.textContent = "";
   }
 }
 
@@ -106,6 +137,7 @@ function init() {
       } else {
         setStatus(`Synced (${counts})`);
       }
+      setLastSynced(result.synced_at);
     } catch (err) {
       setStatus(`Sync failed: ${err.message}`, true);
     } finally {
@@ -116,6 +148,7 @@ function init() {
   });
 
   loadDashboard(initial.from, initial.to);
+  loadLastSynced();
 }
 
 init();
