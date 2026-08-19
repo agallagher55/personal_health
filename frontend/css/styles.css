@@ -110,10 +110,35 @@ h1 {
   color: var(--error);
 }
 
+.dashboard-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
 .dashboard-grid {
+  flex: 1;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 1rem;
+}
+
+.activity-panel {
+  flex: 0 0 280px;
+  position: sticky;
+  top: 1rem;
+}
+
+@media (max-width: 700px) {
+  .dashboard-layout {
+    flex-direction: column;
+  }
+
+  .activity-panel {
+    flex-basis: auto;
+    width: 100%;
+    position: static;
+  }
 }
 
 .card {
