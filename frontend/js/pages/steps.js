@@ -1,8 +1,8 @@
 import { initMetricDetailPage } from "./metric-detail.js";
-import { drawSparkline } from "../charts.js";
+import { drawBarChart } from "../charts.js";
 
 function renderChart(canvas, records) {
-  drawSparkline(canvas, records.map((r) => r.value), {
+  drawBarChart(canvas, records.map((r) => r.value), {
     color: "#2563eb",
     labels: records.map((r) => r.date),
   });
