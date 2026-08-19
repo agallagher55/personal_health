@@ -1,3 +1,3 @@
 import { initSimpleValueDetailPage } from "./simple-value-metric.js";
 
-initSimpleValueDetailPage("hrv", { unit: " ms", color: "#9333ea", decimals: 1 });
+initSimpleValueDetailPage("hrv", { title: "Heart Rate Variability", unit: " ms", color: "#9333ea", decimals: 1 });

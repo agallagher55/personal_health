@@ -7,18 +7,7 @@
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
-  <header class="app-header">
-    <h1>Personal Health</h1>
-    <form class="range-controls" id="range-form">
-      <label>From <input type="date" id="range-from" /></label>
-      <label>To <input type="date" id="range-to" /></label>
-      <button type="submit" id="range-apply">Apply</button>
-      <span class="sync-control">
-        <button type="button" id="sync-now">Sync now</button>
-        <span id="last-synced" class="last-synced"></span>
-      </span>
-    </form>
-  </header>
+  <header class="app-header" id="page-header"></header>
 
   <p id="status" class="status" role="status"></p>
 

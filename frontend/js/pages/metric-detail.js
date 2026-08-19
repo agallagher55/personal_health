@@ -1,4 +1,6 @@
 import { getMetricDetail } from "../api.js";
+import { renderPageHeader } from "../components/page-header.js";
+import { loadLastSynced, wireSyncButton } from "../sync-control.js";
 
 // Matches docs/api-contract.md's per-metric detail default: last 30 days.
 const RANGE_DAYS = 30;
@@ -15,16 +17,23 @@ function defaultRange() {
 }
 
 /**
- * Wires up a per-metric detail page: date-range form, status line, and
- * metric-specific chart/table rendering supplied by the caller. Mirrors
- * dashboard.js's range-handling but against GET /api/metrics/{metric}
- * instead of the dashboard summary endpoint.
+ * Wires up a per-metric detail page: header (title, date-range form, sync
+ * button), status line, and metric-specific chart/table rendering supplied
+ * by the caller. Mirrors dashboard.js's range/sync handling but against
+ * GET /api/metrics/{metric} instead of the dashboard summary endpoint.
  */
-export function initMetricDetailPage(metric, { renderChart, renderTable }) {
+export function initMetricDetailPage(metric, { title, renderChart, renderTable }) {
+  const header = renderPageHeader(document.getElementById("page-header"), {
+    title,
+    showSync: true,
+  });
+
   const els = {
-    form: document.getElementById("range-form"),
-    from: document.getElementById("range-from"),
-    to: document.getElementById("range-to"),
+    form: header.form,
+    from: header.from,
+    to: header.to,
+    sync: header.sync,
+    lastSynced: header.lastSynced,
     status: document.getElementById("status"),
     chart: document.getElementById("chart"),
     tableBody: document.getElementById("table-body"),
@@ -59,8 +68,17 @@ export function initMetricDetailPage(metric, { renderChart, renderTable }) {
     load(from, to);
   });
 
+  wireSyncButton(els.sync, els.lastSynced, {
+    setStatus,
+    onDone: () => {
+      const { from, to } = currentRange();
+      load(from, to);
+    },
+  });
+
   const initial = defaultRange();
   els.from.value = initial.from;
   els.to.value = initial.to;
   load(initial.from, initial.to);
+  loadLastSynced(els.lastSynced);
 }

@@ -1,4 +1,6 @@
-import { getHealth, getMetrics, triggerSync } from "./api.js";
+import { getMetrics } from "./api.js";
+import { renderPageHeader } from "./components/page-header.js";
+import { loadLastSynced, wireSyncButton } from "./sync-control.js";
 import { renderSteps } from "./components/steps-card.js";
 import { renderHeartRate } from "./components/heart-rate-card.js";
 import { renderSleep } from "./components/sleep-card.js";
@@ -6,12 +8,17 @@ import { renderActivity } from "./components/activity-card.js";
 import { renderSimpleValueCard } from "./components/simple-value-card.js";
 import { renderWeightCard } from "./components/weight-card.js";
 
+const header = renderPageHeader(document.getElementById("page-header"), {
+  title: "Personal Health",
+  showSync: true,
+});
+
 const els = {
-  form: document.getElementById("range-form"),
-  from: document.getElementById("range-from"),
-  to: document.getElementById("range-to"),
-  sync: document.getElementById("sync-now"),
-  lastSynced: document.getElementById("last-synced"),
+  form: header.form,
+  from: header.from,
+  to: header.to,
+  sync: header.sync,
+  lastSynced: header.lastSynced,
   status: document.getElementById("status"),
   steps: document.getElementById("steps-card-body"),
   heartRate: document.getElementById("heart-rate-card-body"),
@@ -52,27 +59,6 @@ function setStatus(message, isError = false) {
   els.status.classList.toggle("status-error", isError);
 }
 
-function setLastSynced(isoTimestamp) {
-  els.lastSynced.textContent = `Last synced: ${formatRelativeTime(isoTimestamp)}`;
-}
-
-function formatRelativeTime(isoTimestamp) {
-  if (!isoTimestamp) return "never";
-
-  const diffSeconds = Math.round((Date.now() - new Date(isoTimestamp).getTime()) / 1000);
-  if (diffSeconds < 5) return "just now";
-  if (diffSeconds < 60) return `${diffSeconds}s ago`;
-
-  const diffMinutes = Math.round(diffSeconds / 60);
-  if (diffMinutes < 60) return `${diffMinutes}m ago`;
-
-  const diffHours = Math.round(diffMinutes / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-
-  const diffDays = Math.round(diffHours / 24);
-  return `${diffDays}d ago`;
-}
-
 function currentRange() {
   const fallback = defaultRange();
   return { from: els.from.value || fallback.from, to: els.to.value || fallback.to };
@@ -100,15 +86,6 @@ async function loadDashboard(from, to) {
   }
 }
 
-async function loadLastSynced() {
-  try {
-    const health = await getHealth();
-    setLastSynced(health.data_store_last_modified);
-  } catch (err) {
-    els.lastSynced.textContent = "";
-  }
-}
-
 function init() {
   const initial = defaultRange();
   els.from.value = initial.from;
@@ -120,35 +97,16 @@ function init() {
     loadDashboard(from, to);
   });
 
-  els.sync.addEventListener("click", async () => {
-    els.sync.disabled = true;
-    setStatus("Syncing…");
-    try {
-      const result = await triggerSync();
-      const counts = Object.entries(result.synced)
-        .map(([metric, count]) => `${metric}: ${count}`)
-        .join(", ");
-      // A partial failure (see docs/api-contract.md's POST /api/sync) still
-      // means the other metrics genuinely synced - report both rather than
-      // hiding the failure or treating the whole sync as an error.
-      if (result.errors && Object.keys(result.errors).length > 0) {
-        const failed = Object.keys(result.errors).join(", ");
-        setStatus(`Synced (${counts}) — failed: ${failed}`, true);
-      } else {
-        setStatus(`Synced (${counts})`);
-      }
-      setLastSynced(result.synced_at);
-    } catch (err) {
-      setStatus(`Sync failed: ${err.message}`, true);
-    } finally {
-      els.sync.disabled = false;
+  wireSyncButton(els.sync, els.lastSynced, {
+    setStatus,
+    onDone: () => {
       const { from, to } = currentRange();
       loadDashboard(from, to);
-    }
+    },
   });
 
   loadDashboard(initial.from, initial.to);
-  loadLastSynced();
+  loadLastSynced(els.lastSynced);
 }
 
 init();

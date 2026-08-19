@@ -48,4 +48,4 @@ function renderTable(tbody, records) {
   }
 }
 
-initMetricDetailPage("activity", { renderChart, renderTable });
+initMetricDetailPage("activity", { title: "Activity", renderChart, renderTable });

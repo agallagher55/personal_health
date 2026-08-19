@@ -35,4 +35,4 @@ function renderTable(tbody, records) {
   }
 }
 
-initMetricDetailPage("sleep", { renderChart, renderTable });
+initMetricDetailPage("sleep", { title: "Sleep", renderChart, renderTable });
