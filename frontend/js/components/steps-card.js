@@ -1,4 +1,4 @@
-import { drawSparkline } from "../charts.js";
+import { drawBarChart } from "../charts.js";
 
 // `records` is docs/api-contract.md's steps shape: [{ date, value }].
 export function renderSteps(container, records) {
@@ -18,7 +18,7 @@ export function renderSteps(container, records) {
   const canvas = document.createElement("canvas");
   canvas.className = "sparkline";
   container.appendChild(canvas);
-  drawSparkline(canvas, records.map((r) => r.value), {
+  drawBarChart(canvas, records.map((r) => r.value), {
     color: "#2563eb",
     labels: records.map((r) => r.date),
   });
