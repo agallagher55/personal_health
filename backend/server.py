@@ -290,35 +290,27 @@ def _reshape_temperature(points):
     """Issue #30: `core-body-temperature` synced 0 points live (this device
     apparently never emits it), so google_health_client.py now reads
     `daily-sleep-temperature-derivations` instead - Fitbit's actual nightly
-    skin-temperature-variation feature, a deviation from a personal baseline
-    rather than an absolute reading. STILL UNVERIFIED: following
-    breathing_rate's confirmed shape (payload nested under the camelCase
-    data type name, with "date" as a sibling {year, month, day} dict inside
-    that same payload - see _reshape_breathing_rate), but the value field
-    name is a fresh guess with no live response to check it against yet."""
+    skin-temperature-variation feature. Confirmed live 2026-08-20: the date
+    is a sibling {year, month, day} dict inside the payload as guessed (see
+    _reshape_breathing_rate for the same pattern), but there's no single
+    "delta"/"deviation" field - the payload instead carries the night's
+    absolute reading (`nightlyTemperatureCelsius`) and the personal baseline
+    it's compared against (`baselineTemperatureCelsius`) separately, plus a
+    30-day stddev not used here. "Variation from baseline" is their
+    difference, computed here rather than read off any single field - every
+    guessed field name from before this fix (temperatureDeltaCelsius etc.)
+    was wrong, which silently dropped the point instead of erroring."""
     by_date = {}
     for p in points:
         payload = p.get("dailySleepTemperatureDerivations")
-        value = None
-        d = None
-        if isinstance(payload, dict):
-            for key in (
-                "temperatureDeltaCelsius",
-                "temperatureVariationCelsius",
-                "deviationCelsius",
-                "temperatureCelsius",
-                "celsius",
-                "value",
-            ):
-                if key in payload:
-                    value = _to_number(payload[key])
-                    break
-            d = _civil_value_to_date(payload)
-        if d is None:
-            d = _civil_value_to_date(p.get("civilStartTime")) or _civil_value_to_date(p.get("civilEndTime"))
-        if d is None or value is None:
+        if not isinstance(payload, dict):
             continue
-        by_date.setdefault(d, []).append(value)
+        nightly = _to_number(payload.get("nightlyTemperatureCelsius"))
+        baseline = _to_number(payload.get("baselineTemperatureCelsius"))
+        d = _civil_value_to_date(payload)
+        if d is None or nightly is None or baseline is None:
+            continue
+        by_date.setdefault(d, []).append(nightly - baseline)
     return [{"date": d, "value": round(sum(v) / len(v), 2)} for d, v in sorted(by_date.items())]
 
 
