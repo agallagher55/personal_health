@@ -110,10 +110,25 @@ DATA_TYPES = {
         "page_size": 10000,
     },
     "temperature": {
-        # ghealth registry: id "core-body-temperature", sample-based (physical time).
-        "api_id": "core-body-temperature",
-        "filter_field": "core_body_temperature.sample_time.physical_time",
-        "time_kind": "physical",
+        # Issue #30: a live sync against `core-body-temperature` (the original
+        # guess) returned 0 data points while every other metric returned real
+        # data - not an error, so the request itself was valid, but this
+        # Fitbit device apparently never emits raw core-body-temperature
+        # samples. This is the same "device doesn't populate this shape"
+        # quirk `steps` had (see the module docstring), except here the fix
+        # isn't a different read_method for the same data type - it's a
+        # different data type. Fitbit's actual temperature feature is
+        # nightly "skin temperature variation" (deviation from a personal
+        # baseline), which the ghealth CLI registry lists separately as
+        # "daily-sleep-temperature-derivations" (TimeField "daily", alongside
+        # daily-respiratory-rate etc.) - not "core-body-temperature" at all.
+        # Switched to that, following breathing_rate's confirmed "daily"
+        # TimeField -> bare ".date" filter pattern. Still UNVERIFIED against
+        # a live response - see server.py's _reshape_temperature for the
+        # value field name, which is a fresh guess.
+        "api_id": "daily-sleep-temperature-derivations",
+        "filter_field": "daily_sleep_temperature_derivations.date",
+        "time_kind": "civil_date",
         "page_size": 10000,
     },
     "weight": {
