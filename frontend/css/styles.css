@@ -149,12 +149,21 @@ h1 {
 }
 
 .card h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
   margin: 0 0 0.75rem;
   font-size: 0.9rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
   color: var(--text-muted);
+}
+
+.card-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
 }
 
 .card h2 a {
