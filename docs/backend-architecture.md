@@ -85,14 +85,14 @@ Data type IDs currently mapped in `google_health_client.DATA_TYPES` (our metric 
 | `spo2` | `oxygen-saturation` | `oxygen_saturation.sample_time.physical_time` | physical | list | verified live, real values rendering correctly (2026-08-19) |
 | `hrv` | `heart-rate-variability` | `heart_rate_variability.sample_time.physical_time` | physical | list | verified live, see reshaping note below (the value field name needed a fix) |
 | `breathing_rate` | `daily-respiratory-rate` | `daily_respiratory_rate.date` | `civil_date` (bare date, no time) | list | verified live, 3rd attempt on the filter field, but real data now syncing and rendering correctly |
-| `temperature` | `daily-sleep-temperature-derivations` | `daily_sleep_temperature_derivations.date` | `civil_date` (bare date, no time) | list | **unverified reshaping**, but the request itself is now confirmed live (see issue #30 note below) |
+| `temperature` | `daily-sleep-temperature-derivations` | `daily_sleep_temperature_derivations.date` | `civil_date` (bare date, no time) | list | verified live (2026-08-20, see issue #30 note below) |
 | `weight` | `weight` | `weight.sample_time.physical_time` | physical | list | verified live, real values rendering correctly (2026-08-19) |
 
 Both `sleep`/`activity` confirmed live (same 2026-08-17 session as the `steps` diagnosis above). The plain list endpoint returns real records for both on this account/device, so neither needs the `daily_rollup` workaround `steps` does.
 
 `spo2`, `hrv`, `breathing_rate`, and `weight` are now confirmed live (2026-08-19), real data synced and rendered correctly on the dashboard. `breathing_rate` took three attempts to even get a data type ID/filter Google would accept a request for at all (see its confidence note above), plus one more fix once real points arrived: the date was nested inside `dailyRespiratoryRate.date` (a `{year, month, day}` dict, like `steps`' dailyRollUp shape), not a sibling top-level field the way the fix first guessed - the value field name (`breathsPerMinute`) was right from the start.
 
-**`temperature` (issue #30, 2026-08-20):** a live sync against the original `core-body-temperature` guess returned **0 data points** while every other metric returned real data that same run - not an error, so the request was valid, but this device never emits raw core-body-temperature samples. Switched to `daily-sleep-temperature-derivations`, the ghealth CLI registry's separate entry for Fitbit's actual nightly "skin temperature variation" feature (a deviation from a personal baseline, not an absolute reading - `TimeField: daily`, same bare-`.date` filter pattern `breathing_rate` uses). Still needs a live sync to confirm the request itself returns real data, and `server.py`'s value-field-name guess (see "Query API" below) is untested - the frontend labels were updated to "Temperature Variation" since the metric is now a delta and can be negative.
+**`temperature` (issue #30, 2026-08-20):** a live sync against the original `core-body-temperature` guess returned **0 data points** while every other metric returned real data that same run - not an error, so the request was valid, but this device never emits raw core-body-temperature samples. Switched to `daily-sleep-temperature-derivations`, the ghealth CLI registry's separate entry for Fitbit's actual nightly "skin temperature variation" feature (`TimeField: daily`, same bare-`.date` filter pattern `breathing_rate` uses) - confirmed live the same day, 1 real point synced. The frontend labels were updated to "Temperature Variation" since the metric is a delta from baseline and can be negative - see the reshaping note below for how that delta is actually computed (it needed a second fix once the real payload could be inspected).
 
 ## JSON data store shape
 
@@ -125,7 +125,7 @@ Revisit (e.g. split into one JSON file per metric) only if a single file becomes
 2. Heart rate (resting + intraday, if the Google Health API's data bundles expose it), implemented, verified live
 3. Sleep (stages, duration, efficiency), implemented, verified live (real sessions with `shortAwakenings`, `startTime`/`endTime`, `type`, UTC offsets)
 4. Activity/exercise logs, implemented, verified live (real workout returned with `exerciseType`, `metricsSummary`, `heartRateZoneDurations`)
-5. SpO2, HRV, breathing rate, added 2026-08-18, **verified live** (2026-08-19, see the data type table above); temperature added the same day, found to be pulling the wrong data type (issue #30, 2026-08-20 - see the data type table above), now points at `daily-sleep-temperature-derivations` but is **still unverified**, since no data has synced against the new data type yet
+5. SpO2, HRV, breathing rate, added 2026-08-18, **verified live** (2026-08-19, see the data type table above); temperature added the same day, found to be pulling the wrong data type (issue #30, 2026-08-20 - see the data type table above), now points at `daily-sleep-temperature-derivations` and is **verified live** (2026-08-20)
 6. Body weight, added 2026-08-18, **verified live** (2026-08-19, BMI not separately mapped; not confirmed to be its own data type)
 
 ## Query API (`server.py`)
@@ -178,19 +178,27 @@ value field name (`breathsPerMinute`) right immediately but needed one fix
 to its date lookup: the date is nested *inside* the `dailyRespiratoryRate`
 payload as a `{year, month, day}` dict, not a sibling top-level field.
 
-**`temperature` (issue #30):** the original guess (`core-body-temperature`,
-handled by `_reshape_sample_series()`) synced 0 points live - not a
-reshaping bug, the device just never emits that data type. Now reads
+**`temperature` (issue #30), confirmed live 2026-08-20 - two fixes:** the
+original guess (`core-body-temperature`, handled by
+`_reshape_sample_series()`) synced 0 points live - not a reshaping bug, the
+device just never emits that data type. Switched to
 `daily-sleep-temperature-derivations` instead (see the data type table
-above), with a new `_reshape_temperature()` following `_reshape_breathing_rate()`'s
-confirmed "date nested inside the payload as `{year, month, day}`" shape.
-The value field name is an unconfirmed guess (`temperatureDeltaCelsius`,
-with several fallbacks) - **still the only metric left unconfirmed**, now
-one guess removed from where it started.
+above), which fixed the sync but not the display: the new
+`_reshape_temperature()` got the date lookup right on the first try
+(nested inside the payload as a `{year, month, day}` dict, matching
+`_reshape_breathing_rate()`'s confirmed shape), but every guessed value
+field name (`temperatureDeltaCelsius` etc.) was wrong, so the point was
+silently dropped and the dashboard still showed no data despite the sync
+reporting 1 point. The real payload has no single delta field at all - it
+carries the night's absolute reading (`nightlyTemperatureCelsius`) and the
+personal baseline it's compared against (`baselineTemperatureCelsius`)
+separately (plus `relativeNightlyStddev30dCelsius`, unused). `_reshape_temperature()`
+now computes `nightlyTemperatureCelsius - baselineTemperatureCelsius`
+itself rather than reading a single field - this is the last metric to get
+confirmed live, all nine now verified.
 
 ## Open questions
 
 - Whether `requests` is actually present in `arcgispro-py3` (if not, `http_client.py` already falls back to `urllib.request` automatically).
-- The exact per-data-type payload schema for `temperature` reshaping in `server.py` (see "Query API" above). Every other metric went through this same unverified state before being confirmed live.
-- Whether `daily-sleep-temperature-derivations` (the issue #30 replacement for `core-body-temperature`, which synced 0 points) actually returns data for this account/device: needs the same kind of live back-and-forth `breathing_rate` did once it returns something to check the value field name against.
+- (Resolved 2026-08-20) The exact per-data-type payload schema for `temperature` reshaping in `server.py` - see the reshaping note above; all nine metrics are now confirmed live.
 - Any request rate limits/quotas specific to the Google Health API's REST endpoints: not yet hit in testing, since all client testing so far has been against mocks except for the one-off live diagnosis above, not a full sync.
