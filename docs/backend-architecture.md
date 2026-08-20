@@ -1,12 +1,12 @@
-# Backend Architecture (planning)
+# Backend Architecture
 
 ## Language / stack
 
-- **Python**, restricted to packages bundled in Esri's ArcGIS Pro 3.5 default `arcgispro-py3` conda environment — no `pip install`, no environment cloning. See "Verifying available packages" below.
-- Web framework: **none** — third-party frameworks (Flask, FastAPI, etc.) are not part of the default ArcGIS Pro environment, so the query API is built on the standard library's `http.server` (e.g. subclassing `BaseHTTPRequestHandler` / `ThreadingHTTPServer`), returning JSON responses.
-- HTTP client: **`requests`**, expected to be available by default (it's a dependency of the bundled `arcgis`/ArcGIS API for Python package) — used to call the Google Health API. Confirm before relying on it; fall back to `urllib.request` (always in stdlib) if it's not present.
-- Storage: a **JSON file** on disk, read/written with the standard library `json` module — no database.
-- Scheduling: no background scheduler for v1 — data sync is triggered manually (CLI script) or on demand from the frontend.
+- **Python**, restricted to packages bundled in Esri's ArcGIS Pro 3.5 default `arcgispro-py3` conda environment, no `pip install`, no environment cloning. See "Verifying available packages" below.
+- Web framework: **none**. Third-party frameworks (Flask, FastAPI, etc.) are not part of the default ArcGIS Pro environment, so the query API is built on the standard library's `http.server` (e.g. subclassing `BaseHTTPRequestHandler` / `ThreadingHTTPServer`), returning JSON responses.
+- HTTP client: **`requests`**, expected to be available by default (it's a dependency of the bundled `arcgis`/ArcGIS API for Python package), used to call the Google Health API. Confirm before relying on it; fall back to `urllib.request` (always in stdlib) if it's not present.
+- Storage: a **JSON file** on disk, read/written with the standard library `json` module, no database.
+- Scheduling: no background scheduler for v1, data sync is triggered manually (CLI script) or on demand from the frontend.
 - Config/secrets: a local, git-ignored JSON or `.ini` config file (standard library `configparser` or plain `json`) for OAuth client ID/secret and tokens.
 
 ## Verifying available packages
@@ -21,12 +21,12 @@ Update this doc with the confirmed list of what's usable (particularly: `request
 
 ## Responsibilities
 
-1. **Auth** — handle the Google Health API's OAuth 2.0 flow, store/refresh access & refresh tokens in the local config file.
-2. **Ingestion** — fetch data from the Google Health API for configured data types and date ranges, normalize it, and write it into the JSON data store.
-3. **Query API** — a small stdlib HTTP server exposing endpoints for the frontend to query stored data (by metric, date range).
-4. **Sync management** — track what's already been pulled (e.g. last-synced timestamp per metric) to avoid redundant calls and respect API rate limits.
+1. **Auth**: handle the Google Health API's OAuth 2.0 flow, store/refresh access & refresh tokens in the local config file.
+2. **Ingestion**: fetch data from the Google Health API for configured data types and date ranges, normalize it, and write it into the JSON data store.
+3. **Query API**: a small stdlib HTTP server exposing endpoints for the frontend to query stored data (by metric, date range).
+4. **Sync management**: track what's already been pulled (e.g. last-synced timestamp per metric) to avoid redundant calls and respect API rate limits.
 
-## Proposed module layout
+## Module layout
 
 ```
 backend/
@@ -41,8 +41,12 @@ backend/
 ├── store.py                  # read/write helpers for the JSON data store (implemented)
 ├── sync.py                   # orchestrates pulling data and writing it to the store (implemented)
 ├── server.py                # stdlib http.server-based query API (implemented)
-└── cli.py                    # entry point: `python cli.py auth|sync|serve` (implemented)
+├── cli.py                    # entry point: `python cli.py auth|sync|serve` (implemented)
+├── start-server.bat          # Windows convenience script
+└── start-sync.bat            # Windows convenience script: runs `python cli.py sync` in arcgispro-py3
 ```
+
+Note: as of this review, `start-server.bat` actually runs `python cli.py auth`, not `serve`, despite its name. Worth a fix or a rename in `backend/`, flagged here since the mismatch isn't obvious from the filename alone.
 
 ## Calling the Google Health API
 
@@ -51,14 +55,14 @@ The exact REST shape isn't in Google's own docs where we could easily verify it 
 - Base URL: `https://health.googleapis.com/v4`
 - Read endpoint: `GET /users/me/dataTypes/{dataTypeId}/dataPoints`, `Authorization: Bearer {access_token}`
 - Filtering: an AIP-160-style `filter` query param, e.g. `steps.interval.civil_start_time >= "2026-08-01T00:00:00" AND steps.interval.civil_start_time < "2026-08-08T00:00:00"`. Two time "kinds" matter:
-  - **civil** — local calendar time, no UTC suffix (interval/session types like `steps`, `sleep`)
-  - **physical** — an absolute UTC instant, `Z`-suffixed (sample types like `heart-rate`)
-- Pagination: `pageSize` (capped per data type — 25 for `sleep`/`exercise`, higher for others) and `pageToken` / `nextPageToken`.
+  - **civil**, local calendar time, no UTC suffix (interval/session types like `steps`, `sleep`)
+  - **physical**, an absolute UTC instant, `Z`-suffixed (sample types like `heart-rate`)
+- Pagination: `pageSize` (capped per data type, 25 for `sleep`/`exercise`, higher for others) and `pageToken` / `nextPageToken`.
 - Response: `{"dataPoints": [...], "nextPageToken": "..."}`.
 
-**Some data types don't populate the plain list endpoint at all.** Confirmed live (OAuth Playground, real account, real Fitbit Air device) on 2026-08-17: `GET .../dataTypes/steps/dataPoints` and `.../dataPoints:reconcile` both returned zero results for a week with confirmed real activity (steps visible in the Google Health app and via `users.pairedDevices`). `POST .../dataTypes/steps/dataPoints:dailyRollUp` returned real daily totals for the same range. This particular device apparently only emits `steps` as rolled-up daily totals, never as raw per-interval samples — `heart-rate` on the same device/account *did* return real data from the plain list endpoint, so this isn't a blanket account/auth issue, just a per-data-type quirk. `google_health_client.py` now routes `steps` through `dailyRollUp` (`_list_via_daily_rollup`) instead of the plain list endpoint; other data types marked `"read_method": "daily_rollup"` in `DATA_TYPES` would get the same treatment if they turn out to need it.
+**Some data types don't populate the plain list endpoint at all.** Confirmed live (OAuth Playground, real account, real Fitbit Air device) on 2026-08-17: `GET .../dataTypes/steps/dataPoints` and `.../dataPoints:reconcile` both returned zero results for a week with confirmed real activity (steps visible in the Google Health app and via `users.pairedDevices`). `POST .../dataTypes/steps/dataPoints:dailyRollUp` returned real daily totals for the same range. This particular device apparently only emits `steps` as rolled-up daily totals, never as raw per-interval samples. `heart-rate` on the same device/account *did* return real data from the plain list endpoint, so this isn't a blanket account/auth issue, just a per-data-type quirk. `google_health_client.py` now routes `steps` through `dailyRollUp` (`_list_via_daily_rollup`) instead of the plain list endpoint; other data types marked `"read_method": "daily_rollup"` in `DATA_TYPES` would get the same treatment if they turn out to need it.
 
-`dailyRollUp` shape (`POST .../dataTypes/{dataTypeId}/dataPoints:dailyRollUp`, verified against `ghealth`'s `buildDailyRollupBody` and its test fixtures, not just the REST reference — the reference's field names for the request body didn't match the live API):
+`dailyRollUp` shape (`POST .../dataTypes/{dataTypeId}/dataPoints:dailyRollUp`, verified against `ghealth`'s `buildDailyRollupBody` and its test fixtures, not just the REST reference; the reference's field names for the request body didn't match the live API):
 ```json
 {
   "range": {
@@ -68,7 +72,7 @@ The exact REST shape isn't in Google's own docs where we could easily verify it 
   "windowSizeDays": 1
 }
 ```
-`windowSizeDays` is documented as optional (default 1) but the live API 400s if it's omitted — always send it explicitly. Response: `{"rollupDataPoints": [{"civilStartTime": {...}, "civilEndTime": {...}, "steps": {"countSum": "13850"}}, ...], "nextPageToken": "..."}` — no `name` or `time` field, so `store._point_key` falls back to `civilStartTime` for dedup on these points.
+`windowSizeDays` is documented as optional (default 1) but the live API 400s if it's omitted; always send it explicitly. Response: `{"rollupDataPoints": [{"civilStartTime": {...}, "civilEndTime": {...}, "steps": {"countSum": "13850"}}, ...], "nextPageToken": "..."}`. No `name` or `time` field, so `store._point_key` falls back to `civilStartTime` for dedup on these points.
 
 Data type IDs currently mapped in `google_health_client.DATA_TYPES` (our metric name → Google's `dataTypeId` → filter field):
 
@@ -76,21 +80,21 @@ Data type IDs currently mapped in `google_health_client.DATA_TYPES` (our metric 
 |---|---|---|---|---|---|
 | `steps` | `steps` | `steps.interval.civil_start_time` | civil | `daily_rollup` | verified live (see above) |
 | `heart_rate` | `heart-rate` | `heart_rate.sample_time.physical_time` | physical | list | verified live |
-| `sleep` | `sleep` | `sleep.interval.civil_end_time` (note: **end** time, the one exception) | civil | list | verified live — real sleep sessions returned |
-| `activity` | `exercise` | `exercise.interval.civil_start_time` | civil | list | verified live — a real logged workout returned |
-| `spo2` | `oxygen-saturation` | `oxygen_saturation.sample_time.physical_time` | physical | list | verified live — real values rendering correctly (2026-08-19) |
-| `hrv` | `heart-rate-variability` | `heart_rate_variability.sample_time.physical_time` | physical | list | verified live — see reshaping note below (the value field name needed a fix) |
-| `breathing_rate` | `daily-respiratory-rate` | `daily_respiratory_rate.date` | `civil_date` (bare date, no time) | list | verified live — 3rd attempt on the filter field, but real data now syncing and rendering correctly |
-| `temperature` | `core-body-temperature` | `core_body_temperature.sample_time.physical_time` | physical | list | **unverified** — no data synced yet to check against (account may not have this data type) |
-| `weight` | `weight` | `weight.sample_time.physical_time` | physical | list | verified live — real values rendering correctly (2026-08-19) |
+| `sleep` | `sleep` | `sleep.interval.civil_end_time` (note: **end** time, the one exception) | civil | list | verified live, real sleep sessions returned |
+| `activity` | `exercise` | `exercise.interval.civil_start_time` | civil | list | verified live, a real logged workout returned |
+| `spo2` | `oxygen-saturation` | `oxygen_saturation.sample_time.physical_time` | physical | list | verified live, real values rendering correctly (2026-08-19) |
+| `hrv` | `heart-rate-variability` | `heart_rate_variability.sample_time.physical_time` | physical | list | verified live, see reshaping note below (the value field name needed a fix) |
+| `breathing_rate` | `daily-respiratory-rate` | `daily_respiratory_rate.date` | `civil_date` (bare date, no time) | list | verified live, 3rd attempt on the filter field, but real data now syncing and rendering correctly |
+| `temperature` | `core-body-temperature` | `core_body_temperature.sample_time.physical_time` | physical | list | **unverified**, no data synced yet to check against (account may not have this data type) |
+| `weight` | `weight` | `weight.sample_time.physical_time` | physical | list | verified live, real values rendering correctly (2026-08-19) |
 
-Both `sleep`/`activity` confirmed live (same 2026-08-17 session as the `steps` diagnosis above) — the plain list endpoint returns real records for both on this account/device, so neither needs the `daily_rollup` workaround `steps` does.
+Both `sleep`/`activity` confirmed live (same 2026-08-17 session as the `steps` diagnosis above). The plain list endpoint returns real records for both on this account/device, so neither needs the `daily_rollup` workaround `steps` does.
 
-`spo2`, `hrv`, `breathing_rate`, and `weight` are now confirmed live (2026-08-19) — real data synced and rendered correctly on the dashboard. `breathing_rate` took three attempts to even get a data type ID/filter Google would accept a request for at all (see its confidence note above), plus one more fix once real points arrived: the date was nested inside `dailyRespiratoryRate.date` (a `{year, month, day}` dict, like `steps`' dailyRollUp shape), not a sibling top-level field the way the fix first guessed - the value field name (`breathsPerMinute`) was right from the start. `temperature` hasn't synced any data yet, so its field names are still an open guess - only metric left unconfirmed.
+`spo2`, `hrv`, `breathing_rate`, and `weight` are now confirmed live (2026-08-19), real data synced and rendered correctly on the dashboard. `breathing_rate` took three attempts to even get a data type ID/filter Google would accept a request for at all (see its confidence note above), plus one more fix once real points arrived: the date was nested inside `dailyRespiratoryRate.date` (a `{year, month, day}` dict, like `steps`' dailyRollUp shape), not a sibling top-level field the way the fix first guessed - the value field name (`breathsPerMinute`) was right from the start. `temperature` hasn't synced any data yet, so its field names are still an open guess - only metric left unconfirmed.
 
 ## JSON data store shape
 
-`store.py` keeps the **raw data points returned by the API**, grouped by our metric name, rather than remapping them into a hand-designed shape — the exact per-field schema for each data type (e.g. what a `sleep` data point's stage breakdown looks like) isn't fully confirmed yet, and guessing at field names risked silently dropping or mislabeling real data. Any friendlier reshaping for the frontend (see [`api-contract.md`](./api-contract.md)) happens in `server.py` at serve time, once we've seen real payloads to shape against.
+`store.py` keeps the **raw data points returned by the API**, grouped by our metric name, rather than remapping them into a hand-designed shape. The exact per-field schema for each data type (e.g. what a `sleep` data point's stage breakdown looks like) isn't fully confirmed yet, and guessing at field names risked silently dropping or mislabeling real data. Any friendlier reshaping for the frontend (see [`api-contract.md`](./api-contract.md)) happens in `server.py` at serve time, once we've seen real payloads to shape against.
 
 ```json
 {
@@ -109,61 +113,61 @@ Both `sleep`/`activity` confirmed live (same 2026-08-17 session as the `steps` d
 }
 ```
 
-`store.add_data_points()` keys each point by its `name` (Google's resource path for the point) or, if absent, its `time` — or, for `dailyRollUp`-sourced points which have neither, its `civilStartTime` — or, failing all three (heart_rate's payload has none of them), a hash of its full content. It **upserts** by that key rather than skip-if-seen: a repeat key overwrites the stored point's content instead of being discarded, since a repeat key doesn't always mean identical content — `steps`' dailyRollUp points are keyed by calendar day, and "today"'s total legitimately increases through the day, so a later sync's updated total must win over an earlier sync's stale one. `sync.sync_all()` resumes each metric from its `last_synced` date, or backfills `DEFAULT_BACKFILL_DAYS` (30) on first run.
+`store.add_data_points()` keys each point by its `name` (Google's resource path for the point); if absent, its `time`; for `dailyRollUp`-sourced points which have neither, its `civilStartTime`; or, failing all three (heart_rate's payload has none of them), a hash of its full content. It **upserts** by that key rather than skip-if-seen: a repeat key overwrites the stored point's content instead of being discarded, since a repeat key doesn't always mean identical content. `steps`' dailyRollUp points are keyed by calendar day, and "today"'s total legitimately increases through the day, so a later sync's updated total must win over an earlier sync's stale one. `sync.sync_all()` resumes each metric from its `last_synced` date, or backfills `DEFAULT_BACKFILL_DAYS` (30) on first run.
 
 Revisit (e.g. split into one JSON file per metric) only if a single file becomes unwieldy.
 
 ## Data types to target (roughly in priority order)
 
-1. Steps — implemented (verified live, via `daily_rollup` — see table above)
-2. Heart rate (resting + intraday, if the Google Health API's data bundles expose it) — implemented, verified live
-3. Sleep (stages, duration, efficiency) — implemented, verified live (real sessions with `shortAwakenings`, `startTime`/`endTime`, `type`, UTC offsets)
-4. Activity/exercise logs — implemented, verified live (real workout returned with `exerciseType`, `metricsSummary`, `heartRateZoneDurations`)
-5. SpO2, HRV, breathing rate, temperature — added 2026-08-18, **not yet verified live** (see the data type table above)
-6. Body weight — added 2026-08-18, **not yet verified live** (BMI not separately mapped; not confirmed to be its own data type)
+1. Steps, implemented (verified live, via `daily_rollup`, see table above)
+2. Heart rate (resting + intraday, if the Google Health API's data bundles expose it), implemented, verified live
+3. Sleep (stages, duration, efficiency), implemented, verified live (real sessions with `shortAwakenings`, `startTime`/`endTime`, `type`, UTC offsets)
+4. Activity/exercise logs, implemented, verified live (real workout returned with `exerciseType`, `metricsSummary`, `heartRateZoneDurations`)
+5. SpO2, HRV, breathing rate, added 2026-08-18, **verified live** (2026-08-19, see the data type table above); temperature added the same day but is **still unverified**, since no data has synced for it yet
+6. Body weight, added 2026-08-18, **verified live** (2026-08-19, BMI not separately mapped; not confirmed to be its own data type)
 
 ## Query API (`server.py`)
 
 Implements `docs/api-contract.md` exactly: `GET /api/health`, `GET /api/metrics`,
 `GET /api/metrics/{metric}`, `POST /api/sync`, plus serving `frontend/` as
 static files (so `python cli.py serve` is the only process needed for local
-dev — see `docs/local-dev-setup.md`). Built on `ThreadingHTTPServer` /
+dev, see `docs/local-dev-setup.md`). Built on `ThreadingHTTPServer` /
 `BaseHTTPRequestHandler`, no third-party framework. CORS is wide open
 (`Access-Control-Allow-Origin: *`) since this only ever runs on localhost.
 
 **Reshaping raw store points into the contract's per-metric shapes is now
 verified for all four metrics** against a real `backend/data/health_data.json`
 from a live sync (2026-08-18). Confirmed field paths:
-- `steps`: flat dailyRollUp points — `civilStartTime`/`civilEndTime` are
+- `steps`: flat dailyRollUp points, `civilStartTime`/`civilEndTime` are
   `{"date": {"year", "month", "day"}}`, count at `steps.countSum`.
-- `heart_rate`: nested under `heartRate` — date from
+- `heart_rate`: nested under `heartRate`, date from
   `heartRate.sampleTime.civilTime.date` (local calendar date; falls back to
   truncating `sampleTime.physicalTime`), bpm from
   `heartRate.beatsPerMinute`. Daily "resting" value is still approximated as
-  the **minimum bpm sample seen that day** — the API's `heart-rate` data type
+  the **minimum bpm sample seen that day**. The API's `heart-rate` data type
   is intraday samples, not a dedicated resting-heart-rate metric. Revisit if
   a real resting-heart-rate data type/bundle turns out to exist.
-- `sleep`: nested under `sleep` — session date from `sleep.interval.endTime`
+- `sleep`: nested under `sleep`, session date from `sleep.interval.endTime`
   (falls back to `startTime`), duration from `sleep.summary.minutesAsleep`,
   and stage minutes summed from `sleep.summary.stagesSummary` (a list of
   `{"type": "AWAKE"|"LIGHT"|"DEEP"|"REM", "minutes": "...", "count": "..."}`)
   rather than the per-segment `sleep.stages` list. A stage type absent from
   `stagesSummary` defaults to `0`.
-- `activity`: nested under `exercise` — date from `exercise.interval.startTime`,
+- `activity`: nested under `exercise`, date from `exercise.interval.startTime`,
   type from `exercise.exerciseType`, calories from
   `exercise.metricsSummary.caloriesKcal`, duration from
   `exercise.activeDuration` (a `"<seconds>s"` string, converted to minutes).
 
 `server.py`'s `_extract_*`/`_reshape_*` helpers still skip points they can't
 parse rather than raising, so a future account/device with a differently
-shaped payload degrades to "fewer/empty records" instead of a 500 — but the
+shaped payload degrades to "fewer/empty records" instead of a 500, but the
 field paths themselves are no longer guesses.
 
 **`spo2`, `hrv`, `breathing_rate`, and `weight` were the same kind of guess**
 (added 2026-08-18) that `heart_rate`/`sleep`/`activity` started as, and are
 now similarly confirmed live (2026-08-19): `_reshape_sample_series()`'s
 nested-key/`sampleTime` guess was right for all three sample-based ones out
-of the box, for `spo2` and `weight`. `hrv` needed one fix — the value field
+of the box, for `spo2` and `weight`. `hrv` needed one fix: the value field
 is `rootMeanSquareOfSuccessiveDifferencesMilliseconds`, not the
 `rmssdMillis`/`rmssd`/`value` guesses it started with (those stayed as
 trailing fallbacks). `breathing_rate` (civil/daily, so a separate
@@ -171,12 +175,12 @@ trailing fallbacks). `breathing_rate` (civil/daily, so a separate
 value field name (`breathsPerMinute`) right immediately but needed one fix
 to its date lookup: the date is nested *inside* the `dailyRespiratoryRate`
 payload as a `{year, month, day}` dict, not a sibling top-level field.
-**`temperature` is the only metric still unconfirmed** — no real data has
+**`temperature` is the only metric still unconfirmed**: no real data has
 synced for it yet to check its field-name guesses against.
 
 ## Open questions
 
-- Whether `requests` is actually present in `arcgispro-py3` — if not, `http_client.py` already falls back to `urllib.request` automatically.
-- The exact per-data-type payload schema for `temperature` reshaping in `server.py` — see "Query API" above. (Every other metric went through this same unverified state before being confirmed live.)
-- Whether `temperature`'s data type is even available on this account - `core-body-temperature` may need the same kind of live back-and-forth `breathing_rate` did once it actually returns something to check.
-- Any request rate limits/quotas specific to the Google Health API's REST endpoints — not yet hit in testing since all client testing so far has been against mocks except for the one-off live diagnosis above, not a full sync.
+- Whether `requests` is actually present in `arcgispro-py3` (if not, `http_client.py` already falls back to `urllib.request` automatically).
+- The exact per-data-type payload schema for `temperature` reshaping in `server.py` (see "Query API" above). Every other metric went through this same unverified state before being confirmed live.
+- Whether `temperature`'s data type is even available on this account: `core-body-temperature` may need the same kind of live back-and-forth `breathing_rate` did once it actually returns something to check.
+- Any request rate limits/quotas specific to the Google Health API's REST endpoints: not yet hit in testing, since all client testing so far has been against mocks except for the one-off live diagnosis above, not a full sync.
