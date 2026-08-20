@@ -260,8 +260,18 @@ canvas.stacked-bar {
 }
 
 .activity-type {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
   font-weight: 600;
   font-size: 0.95rem;
+}
+
+.activity-icon {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  color: #f59e0b;
 }
 
 .activity-meta {

@@ -1,3 +1,5 @@
+import { buildActivityIcon } from "./activity-icons.js";
+
 function formatType(type) {
   if (!type) return "Activity";
   return type
@@ -38,7 +40,8 @@ export function renderActivity(container, records) {
 
     const type = document.createElement("span");
     type.className = "activity-type";
-    type.textContent = formatType(ex.type);
+    type.appendChild(buildActivityIcon(ex.type));
+    type.appendChild(document.createTextNode(formatType(ex.type)));
     info.appendChild(type);
 
     if (typeof ex.duration_minutes === "number") {
