@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Weight — Personal Health</title>
   <link rel="stylesheet" href="../css/styles.css" />
+  <script>
+    (function () {
+      var theme = localStorage.getItem("theme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
 </head>
 <body>
   <a class="back-link" href="../index.html">&larr; Dashboard</a>
