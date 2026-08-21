@@ -42,6 +42,7 @@ export function initMetricDetailPage(metric, { title, renderChart, renderTable }
   function setStatus(message, isError = false) {
     els.status.textContent = message;
     els.status.classList.toggle("status-error", isError);
+    els.status.classList.toggle("status-busy", !isError && /^(Syncing|Loading)…$/.test(message));
   }
 
   function currentRange() {
