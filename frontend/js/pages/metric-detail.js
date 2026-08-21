@@ -22,7 +22,7 @@ function defaultRange() {
  * by the caller. Mirrors dashboard.js's range/sync handling but against
  * GET /api/metrics/{metric} instead of the dashboard summary endpoint.
  */
-export function initMetricDetailPage(metric, { title, renderChart, renderTable }) {
+export function initMetricDetailPage(metric, { title, renderChart, renderTable, renderStats }) {
   const header = renderPageHeader(document.getElementById("page-header"), {
     title,
     showSync: true,
@@ -37,6 +37,7 @@ export function initMetricDetailPage(metric, { title, renderChart, renderTable }
     status: document.getElementById("status"),
     chart: document.getElementById("chart"),
     tableBody: document.getElementById("table-body"),
+    stats: document.getElementById("stats"),
   };
 
   function setStatus(message, isError = false) {
@@ -56,6 +57,7 @@ export function initMetricDetailPage(metric, { title, renderChart, renderTable }
       const data = await getMetricDetail(metric, from, to);
       renderChart(els.chart, data.records);
       renderTable(els.tableBody, data.records);
+      if (renderStats) renderStats(els.stats, data.records);
       const count = data.records.length;
       setStatus(`Showing ${data.from} to ${data.to} (${count} record${count === 1 ? "" : "s"})`);
     } catch (err) {

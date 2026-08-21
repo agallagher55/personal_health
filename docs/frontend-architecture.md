@@ -62,6 +62,7 @@ frontend/
 │   ├── api.js                    # fetch() wrappers for the backend query API
 │   ├── dashboard.js               # wires up the dashboard page
 │   ├── charts.js                  # canvas chart-drawing helpers
+│   ├── stats.js                    # trailing-window averages + median/min/max for the detail-page stats sidebar
 │   ├── sync-control.js            # shared "Sync now" + "Last synced" wiring
 │   ├── units.js                   # weight display-unit (kg/lb) preference, via localStorage
 │   ├── components/
@@ -72,7 +73,8 @@ frontend/
 │   │   ├── activity-card.js
 │   │   ├── activity-icons.js      # per-exercise-type icons
 │   │   ├── simple-value-card.js   # shared card for {date, value} metrics (spo2, hrv, breathing_rate, temperature)
-│   │   └── weight-card.js         # like simple-value-card, plus the kg/lb toggle
+│   │   ├── weight-card.js         # like simple-value-card, plus the kg/lb toggle
+│   │   └── stats-panel.js         # renders the detail-page stats sidebar from stats.js's output
 │   └── pages/
 │       ├── metric-detail.js       # shared range/sync/load wiring for every detail page
 │       ├── simple-value-metric.js # shared chart/table rendering for spo2/hrv/breathing_rate/temperature
@@ -114,6 +116,22 @@ frontend/
 - A date-range form in the shared header lets the whole dashboard's view
   window be shifted; a "Sync now" button triggers `POST /api/sync` and
   reloads once it settles, showing a "Last synced" relative timestamp.
+
+## Detail-page stats sidebar
+
+Every per-metric detail page (`.detail-layout` in each `frontend/pages/*.html`)
+puts the chart and table in a `.detail-main` column (2/3 width) alongside a
+`.stats-panel` sidebar (1/3 width, stacking below on narrow screens) showing
+7-day, 14-day, and 30-day trailing averages, the week-over-week change
+(latest 7 days vs. the 7 days before that), and the average, median,
+standard deviation, min, and max over whatever range is currently loaded
+(issue #39). `js/stats.js`'s
+`computeMetricStats()` does the math against each page's own value extractor
+(`r.value`, `r.resting`, `r.duration_minutes`, per-day exercise totals, etc.
+- the same shape each page already uses for its chart), and
+`js/components/stats-panel.js` renders the result; `metric-detail.js` calls
+a page-supplied `renderStats(container, records)` after each load, mirroring
+its existing `renderChart`/`renderTable` callbacks.
 
 ## Resolved (previously open) questions
 

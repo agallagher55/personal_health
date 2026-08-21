@@ -1,5 +1,7 @@
 import { initMetricDetailPage } from "./metric-detail.js";
 import { drawSparkline } from "../charts.js";
+import { computeMetricStats } from "../stats.js";
+import { renderStatsPanel } from "../components/stats-panel.js";
 
 function renderChart(canvas, records) {
   drawSparkline(canvas, records.map((r) => r.duration_minutes), {
@@ -35,4 +37,9 @@ function renderTable(tbody, records) {
   }
 }
 
-initMetricDetailPage("sleep", { title: "Sleep", renderChart, renderTable });
+function renderStats(container, records) {
+  const stats = computeMetricStats(records, { valueFor: (r) => r.duration_minutes });
+  renderStatsPanel(container, stats, { format: formatDuration });
+}
+
+initMetricDetailPage("sleep", { title: "Sleep", renderChart, renderTable, renderStats });

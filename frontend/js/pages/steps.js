@@ -1,5 +1,7 @@
 import { initMetricDetailPage } from "./metric-detail.js";
 import { drawBarChart } from "../charts.js";
+import { computeMetricStats } from "../stats.js";
+import { renderStatsPanel } from "../components/stats-panel.js";
 
 function renderChart(canvas, records) {
   drawBarChart(canvas, records.map((r) => r.value), {
@@ -21,4 +23,9 @@ function renderTable(tbody, records) {
   }
 }
 
-initMetricDetailPage("steps", { title: "Steps", renderChart, renderTable });
+function renderStats(container, records) {
+  const stats = computeMetricStats(records);
+  renderStatsPanel(container, stats, { format: (v) => Math.round(v).toLocaleString() });
+}
+
+initMetricDetailPage("steps", { title: "Steps", renderChart, renderTable, renderStats });

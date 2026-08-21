@@ -1,6 +1,8 @@
 import { initMetricDetailPage } from "./metric-detail.js";
 import { drawSparkline } from "../charts.js";
 import { getWeightUnit, setWeightUnit, convertFromKg } from "../units.js";
+import { computeMetricStats } from "../stats.js";
+import { renderStatsPanel } from "../components/stats-panel.js";
 
 const COLOR = "#4338ca";
 
@@ -8,6 +10,7 @@ let unit = getWeightUnit();
 let records = [];
 let chartCanvas = null;
 let tableBody = null;
+let statsContainer = null;
 
 function draw() {
   if (chartCanvas) {
@@ -28,6 +31,12 @@ function draw() {
       tableBody.appendChild(tr);
     }
   }
+  if (statsContainer) {
+    // Recomputed in the display unit (not kg) so the kg/lb toggle updates
+    // the sidebar the same way it updates the chart and table.
+    const stats = computeMetricStats(records, { valueFor: (r) => convertFromKg(r.value, unit) });
+    renderStatsPanel(statsContainer, stats, { format: (v) => `${v.toFixed(1)} ${unit}` });
+  }
   for (const btn of document.querySelectorAll("#unit-toggle button")) {
     btn.classList.toggle("active", btn.dataset.unit === unit);
   }
@@ -45,6 +54,12 @@ function renderTable(tbody, newRecords) {
   draw();
 }
 
+function renderStats(container, newRecords) {
+  statsContainer = container;
+  records = newRecords;
+  draw();
+}
+
 for (const btn of document.querySelectorAll("#unit-toggle button")) {
   btn.addEventListener("click", () => {
     const newUnit = btn.dataset.unit;
@@ -55,4 +70,4 @@ for (const btn of document.querySelectorAll("#unit-toggle button")) {
   });
 }
 
-initMetricDetailPage("weight", { title: "Weight", renderChart, renderTable });
+initMetricDetailPage("weight", { title: "Weight", renderChart, renderTable, renderStats });

@@ -1,5 +1,7 @@
 import { initMetricDetailPage } from "./metric-detail.js";
 import { drawSparkline } from "../charts.js";
+import { computeMetricStats } from "../stats.js";
+import { renderStatsPanel } from "../components/stats-panel.js";
 
 function formatType(type) {
   if (!type) return "Activity";
@@ -11,11 +13,12 @@ function formatType(type) {
 
 // One record per day with multiple exercises - chart the day's total active
 // minutes, since a per-exercise sparkline wouldn't have a single y-value.
+function dayTotalMinutes(r) {
+  return r.exercises.reduce((sum, ex) => sum + (typeof ex.duration_minutes === "number" ? ex.duration_minutes : 0), 0);
+}
+
 function renderChart(canvas, records) {
-  const totals = records.map((r) =>
-    r.exercises.reduce((sum, ex) => sum + (typeof ex.duration_minutes === "number" ? ex.duration_minutes : 0), 0)
-  );
-  drawSparkline(canvas, totals, {
+  drawSparkline(canvas, records.map(dayTotalMinutes), {
     color: "#16a34a",
     labels: records.map((r) => r.date),
   });
@@ -48,4 +51,9 @@ function renderTable(tbody, records) {
   }
 }
 
-initMetricDetailPage("activity", { title: "Activity", renderChart, renderTable });
+function renderStats(container, records) {
+  const stats = computeMetricStats(records, { valueFor: dayTotalMinutes });
+  renderStatsPanel(container, stats, { format: (v) => `${Math.round(v)} min` });
+}
+
+initMetricDetailPage("activity", { title: "Activity", renderChart, renderTable, renderStats });
