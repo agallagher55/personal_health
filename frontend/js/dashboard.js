@@ -1,6 +1,7 @@
 import { getMetrics } from "./api.js";
 import { renderPageHeader } from "./components/page-header.js";
 import { loadLastSynced, wireSyncButton } from "./sync-control.js";
+import { initBalancedGrid } from "./balanced-grid.js";
 import { renderSteps } from "./components/steps-card.js";
 import { renderHeartRate } from "./components/heart-rate-card.js";
 import { renderSleep } from "./components/sleep-card.js";
@@ -88,6 +89,8 @@ async function loadDashboard(from, to) {
 }
 
 function init() {
+  initBalancedGrid(document.querySelector(".dashboard-grid"));
+
   const initial = defaultRange();
   els.from.value = initial.from;
   els.to.value = initial.to;
