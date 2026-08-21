@@ -1,5 +1,7 @@
 import { initMetricDetailPage } from "./metric-detail.js";
 import { drawSparkline } from "../charts.js";
+import { computeMetricStats } from "../stats.js";
+import { renderStatsPanel } from "../components/stats-panel.js";
 
 // Shared detail-page wiring for the five {date, value}-shaped metrics
 // (spo2, hrv, breathing_rate, temperature, weight) - see
@@ -26,5 +28,11 @@ export function initSimpleValueDetailPage(metric, { title, unit = "", color = "#
     }
   }
 
-  initMetricDetailPage(metric, { title, renderChart, renderTable });
+  function renderStats(container, records) {
+    renderStatsPanel(container, computeMetricStats(records), {
+      format: (v) => `${v.toFixed(decimals)}${unit}`,
+    });
+  }
+
+  initMetricDetailPage(metric, { title, renderChart, renderTable, renderStats });
 }

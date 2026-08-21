@@ -1,5 +1,7 @@
 import { initMetricDetailPage } from "./metric-detail.js";
 import { drawSparkline } from "../charts.js";
+import { computeMetricStats } from "../stats.js";
+import { renderStatsPanel } from "../components/stats-panel.js";
 
 function renderChart(canvas, records) {
   drawSparkline(canvas, records.map((r) => r.resting), {
@@ -21,4 +23,9 @@ function renderTable(tbody, records) {
   }
 }
 
-initMetricDetailPage("heart_rate", { title: "Resting Heart Rate", renderChart, renderTable });
+function renderStats(container, records) {
+  const stats = computeMetricStats(records, { valueFor: (r) => r.resting });
+  renderStatsPanel(container, stats, { format: (v) => `${Math.round(v)} bpm` });
+}
+
+initMetricDetailPage("heart_rate", { title: "Resting Heart Rate", renderChart, renderTable, renderStats });
