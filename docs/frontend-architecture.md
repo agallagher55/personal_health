@@ -127,15 +127,17 @@ frontend/
   the grid at the 700px breakpoint). The CSS `grid-template-columns` is
   just the no-JS/first-paint fallback.
 
-## Detail-page stats sidebar
+## Detail-page layout: chart, stats, and entries table
 
 Every per-metric detail page (`.detail-layout` in each `frontend/pages/*.html`)
-puts the chart and table in a `.detail-main` column (2/3 width) alongside a
-`.stats-panel` sidebar (1/3 width, stacking below on narrow screens) showing
+splits into a `.detail-main` column (2/3 width: the chart, then a
+"Statistics" card) and a `.detail-side` sidebar (1/3 width, stacking below
+on narrow screens: the table of dated entries). The statistics card shows
 7-day, 14-day, and 30-day trailing averages, the week-over-week change
 (latest 7 days vs. the 7 days before that), and the average, median,
 standard deviation, min, and max over whatever range is currently loaded
-(issue #39). `js/stats.js`'s
+(issue #39; the stats card and the entries table were swapped to their
+current spots afterward, putting the table in the sidebar instead). `js/stats.js`'s
 `computeMetricStats()` does the math against each page's own value extractor
 (`r.value`, `r.resting`, `r.duration_minutes`, per-day exercise totals, etc.
 - the same shape each page already uses for its chart), and
