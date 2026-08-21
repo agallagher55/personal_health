@@ -162,6 +162,8 @@ h1 {
 .dashboard-grid {
   flex: 1;
   display: grid;
+  /* Overridden inline by js/balanced-grid.js once it runs, to keep rows
+     balanced (issue #32) - this is just the no-JS/first-paint fallback. */
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   align-content: start;
   gap: 1rem;

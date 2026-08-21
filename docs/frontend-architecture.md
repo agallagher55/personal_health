@@ -62,6 +62,7 @@ frontend/
 │   ├── api.js                    # fetch() wrappers for the backend query API
 │   ├── dashboard.js               # wires up the dashboard page
 │   ├── charts.js                  # canvas chart-drawing helpers
+│   ├── balanced-grid.js            # picks the dashboard grid's column count so rows stay balanced
 │   ├── stats.js                    # trailing-window averages + median/min/max for the detail-page stats sidebar
 │   ├── sync-control.js            # shared "Sync now" + "Last synced" wiring
 │   ├── units.js                   # weight display-unit (kg/lb) preference, via localStorage
@@ -116,6 +117,15 @@ frontend/
 - A date-range form in the shared header lets the whole dashboard's view
   window be shifted; a "Sync now" button triggers `POST /api/sync` and
   reloads once it settles, showing a "Last synced" relative timestamp.
+- The 8 cards in `.dashboard-grid` (the activity panel is a separate fixed
+  sidebar, not part of this grid) are laid out in balanced rows (issue
+  #32): `js/balanced-grid.js` picks the largest column count that fits the
+  grid's width without leaving the last row short by more than one card -
+  equal rows when the card count divides evenly, one card short on the
+  last row otherwise - and recomputes via `ResizeObserver` as the grid's
+  own width changes (window resize, or the activity sidebar dropping below
+  the grid at the 700px breakpoint). The CSS `grid-template-columns` is
+  just the no-JS/first-paint fallback.
 
 ## Detail-page stats sidebar
 
