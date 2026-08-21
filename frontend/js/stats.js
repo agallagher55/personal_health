@@ -1,6 +1,7 @@
 // Rolling-window + distribution statistics for a metric detail page's
-// sidebar (see issue #39): 7/14/30-day trailing averages plus the
-// average, median, min, and max over whatever range is currently loaded.
+// sidebar (see issue #39): 7/14/30-day trailing averages, the
+// week-over-week change, and the average, median, standard deviation,
+// min, and max over whatever range is currently loaded.
 
 export function average(values) {
   if (values.length === 0) return null;
@@ -12,6 +13,15 @@ export function median(values) {
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
   return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
+// Population standard deviation (divides by n, not n-1) - these are the
+// full set of loaded samples for the range, not a sample drawn from a
+// larger population.
+export function standardDeviation(values) {
+  if (values.length === 0) return null;
+  const mean = average(values);
+  return Math.sqrt(average(values.map((v) => (v - mean) ** 2)));
 }
 
 function addDays(dateStr, delta) {
@@ -36,19 +46,28 @@ export function computeMetricStats(records, { dateFor = (r) => r.date, valueFor 
 
   const latestDate = points.reduce((max, p) => (p.date > max ? p.date : max), points[0].date);
 
-  function windowAverage(days) {
-    const cutoff = addDays(latestDate, -(days - 1));
-    return average(points.filter((p) => p.date >= cutoff).map((p) => p.value));
+  // `offsetDays` shifts the window's end back in time, so windowAverage(7)
+  // is the latest 7 days and windowAverage(7, 7) is the 7 days before that
+  // - used for the week-over-week comparison below.
+  function windowAverage(days, offsetDays = 0) {
+    const end = addDays(latestDate, -offsetDays);
+    const cutoff = addDays(end, -(days - 1));
+    const values = points.filter((p) => p.date >= cutoff && p.date <= end).map((p) => p.value);
+    return average(values);
   }
 
   const allValues = points.map((p) => p.value);
+  const week = windowAverage(7);
+  const priorWeek = windowAverage(7, 7);
 
   return {
-    week: windowAverage(7),
+    week,
     twoWeek: windowAverage(14),
     month: windowAverage(30),
+    weekDelta: week != null && priorWeek != null ? week - priorWeek : null,
     average: average(allValues),
     median: median(allValues),
+    stdDev: standardDeviation(allValues),
     min: Math.min(...allValues),
     max: Math.max(...allValues),
   };

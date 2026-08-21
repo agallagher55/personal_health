@@ -122,8 +122,10 @@ frontend/
 Every per-metric detail page (`.detail-layout` in each `frontend/pages/*.html`)
 puts the chart and table in a `.detail-main` column (2/3 width) alongside a
 `.stats-panel` sidebar (1/3 width, stacking below on narrow screens) showing
-7-day, 14-day, and 30-day trailing averages plus the average, median, min,
-and max over whatever range is currently loaded (issue #39). `js/stats.js`'s
+7-day, 14-day, and 30-day trailing averages, the week-over-week change
+(latest 7 days vs. the 7 days before that), and the average, median,
+standard deviation, min, and max over whatever range is currently loaded
+(issue #39). `js/stats.js`'s
 `computeMetricStats()` does the math against each page's own value extractor
 (`r.value`, `r.resting`, `r.duration_minutes`, per-day exercise totals, etc.
 - the same shape each page already uses for its chart), and
