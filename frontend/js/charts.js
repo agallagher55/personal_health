@@ -42,10 +42,15 @@ export function formatTimeOfDay(isoStr) {
  * Draws a simple line sparkline for `values` (an array of numbers; gaps can
  * be represented as null/undefined and are skipped, not interpolated).
  *
- * Labels selectively rather than on every point (see the dataviz skill):
- * the min/max values (the extremes - the point of a trend line) when
- * `labelExtremes` is set, and the first/last x-axis labels when `labels`
- * (e.g. each point's date) is provided.
+ * Labels selectively rather than on every point (see the dataviz skill -
+ * "never a number on every point"): the min/max values (the extremes - the
+ * point of a trend line) and the most recent value (what a reader looks for
+ * first) when `labelExtremes` is set, plus the first/last x-axis labels -
+ * and, where they fit without crowding, a few evenly-spaced labels in
+ * between - when `labels` (e.g. each point's date) is provided. Value and
+ * date labels each do their own collision check and quietly skip rather
+ * than overlap (see marks-and-anatomy.md's "when end-labels collide, don't
+ * stack them").
  */
 export function drawSparkline(canvas, values, { color = "#3b82f6", padding = 4, labels = null, labelExtremes = true, formatLabel = formatShortDate } = {}) {
   const { ctx, width, height } = prepareCanvas(canvas);
@@ -119,34 +124,76 @@ export function drawSparkline(canvas, values, { color = "#3b82f6", padding = 4, 
   if (labelExtremes) {
     ctx.fillStyle = LABEL_COLOR;
     ctx.font = LABEL_FONT;
+
+    // Bounding-box collision check, kept separate per side of the line so a
+    // "below" label never has to dodge an "above" one - only labels sharing
+    // a side can actually overlap.
+    const placed = { above: [], below: [] };
+    const labelGap = 4;
+    function place(point, side) {
+      const text = formatValue(point.v);
+      const x = xFor(point.i);
+      const align = alignFor(x);
+      const w = ctx.measureText(text).width;
+      const left = align === "left" ? x : align === "right" ? x - w : x - w / 2;
+      const right = left + w;
+      if (placed[side].some((r) => left - labelGap < r.right && right + labelGap > r.left)) return;
+      ctx.textAlign = align;
+      ctx.fillText(text, x, side === "above" ? yFor(point.v) - 5 : yFor(point.v) + 11);
+      placed[side].push({ left, right });
+    }
+
     if (points.length > 1) {
       const maxPoint = points.reduce((a, b) => (b.v > a.v ? b : a));
       const minPoint = points.reduce((a, b) => (b.v < a.v ? b : a));
-      ctx.textAlign = alignFor(xFor(maxPoint.i));
-      ctx.fillText(formatValue(maxPoint.v), xFor(maxPoint.i), yFor(maxPoint.v) - 5);
-      if (minPoint.i !== maxPoint.i) {
-        ctx.textAlign = alignFor(xFor(minPoint.i));
-        ctx.fillText(formatValue(minPoint.v), xFor(minPoint.i), yFor(minPoint.v) + 11);
+      place(maxPoint, "above");
+      if (minPoint.i !== maxPoint.i) place(minPoint, "below");
+
+      // The most recent value is the one a reader looks for first, so label
+      // it too when it isn't already an extreme above - on whichever side
+      // has more room around it, skipping quietly (via `place`'s collision
+      // check) if it would still crowd an extreme label.
+      const last = points[points.length - 1];
+      if (last.i !== maxPoint.i && last.i !== minPoint.i) {
+        const mid = (min + max) / 2;
+        place(last, last.v >= mid ? "above" : "below");
       }
     } else {
       // A single point has no trend to speak of - label it directly rather
       // than leaving a bare dot with nothing but a duplicated date range.
-      ctx.textAlign = alignFor(xFor(points[0].i));
-      ctx.fillText(formatValue(points[0].v), xFor(points[0].i), yFor(points[0].v) - 5);
+      place(points[0], "above");
     }
   }
 
   if (hasDateLabels) {
     ctx.fillStyle = LABEL_COLOR;
     ctx.font = LABEL_FONT;
+    const dateY = height - 2;
+    const placed = [];
+    const labelGap = 8;
+    function place(index, align) {
+      const text = formatLabel(labels[index]);
+      const x = xFor(index);
+      const w = ctx.measureText(text).width;
+      const left = align === "left" ? x : align === "right" ? x - w : x - w / 2;
+      const right = left + w;
+      if (placed.some((r) => left - labelGap < r.right && right + labelGap > r.left)) return;
+      ctx.textAlign = align;
+      ctx.fillText(text, x, dateY);
+      placed.push({ left, right });
+    }
+
     if (labels[0] === labels[labels.length - 1]) {
-      ctx.textAlign = "center";
-      ctx.fillText(formatLabel(labels[0]), width / 2, height - 2);
+      place(0, "center");
     } else {
-      ctx.textAlign = "left";
-      ctx.fillText(formatLabel(labels[0]), padding, height - 2);
-      ctx.textAlign = "right";
-      ctx.fillText(formatLabel(labels[labels.length - 1]), width - padding, height - 2);
+      place(0, "left");
+      place(n - 1, "right");
+      // Fill in the otherwise-bare middle (most visible on the 30-day
+      // detail view) wherever a tick fits without crowding its neighbors.
+      for (const frac of [0.5, 0.25, 0.75]) {
+        const index = Math.round(frac * (n - 1));
+        if (index > 0 && index < n - 1) place(index, "center");
+      }
     }
   }
 }
