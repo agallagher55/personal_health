@@ -206,6 +206,35 @@ def _zone_minutes(zone_durations, key):
     return round(seconds / 60, 1) if seconds is not None else 0
 
 
+def _format_instant(dt):
+    return dt.isoformat().replace("+00:00", "Z")
+
+
+def _fill_missing_endpoint(start_time, end_time, duration_seconds):
+    """A manually-logged exercise (no device telemetry) can carry only one
+    side of interval.startTime/endTime - seen live on a real account, a
+    "Treadmill Walk" with duration_minutes/calories but no metricsSummary
+    heart-rate/distance fields and only interval.endTime set. Derives the
+    missing side from whichever instant is present plus activeDuration, so
+    GET /api/metrics/heart_rate/samples still gets a real window to query -
+    the device's HR sensor keeps recording independent of how the workout
+    itself was logged. Leaves both None if duration is unknown or both
+    endpoints are already missing (nothing to derive from)."""
+    if duration_seconds is None:
+        return start_time, end_time
+    if start_time and not end_time:
+        # _parse_datetime is defined further down this module - resolved at
+        # call time, so its later position in the file doesn't matter here.
+        start_dt = _parse_datetime(start_time)
+        if start_dt is not None:
+            end_time = _format_instant(start_dt + timedelta(seconds=duration_seconds))
+    elif end_time and not start_time:
+        end_dt = _parse_datetime(end_time)
+        if end_dt is not None:
+            start_time = _format_instant(end_dt - timedelta(seconds=duration_seconds))
+    return start_time, end_time
+
+
 def _reshape_activity(points):
     """Fields live under exercise.interval (paired with
     exercise.interval.startUtcOffset/endUtcOffset - see
@@ -237,12 +266,15 @@ def _reshape_activity(points):
         distance_mm = _to_number(metrics_summary.get("distanceMillimeters"))
         pace_sec_per_m = _to_number(metrics_summary.get("averagePaceSecondsPerMeter"))
         zone_durations = metrics_summary.get("heartRateZoneDurations")
+        start_time, end_time = _fill_missing_endpoint(
+            interval.get("startTime"), interval.get("endTime"), duration_seconds
+        )
         record = {
             "type": exercise.get("exerciseType") or exercise.get("displayName"),
             "duration_minutes": round(duration_seconds / 60, 1) if duration_seconds is not None else None,
             "calories": _to_number(metrics_summary.get("caloriesKcal")),
-            "start_time": interval.get("startTime"),
-            "end_time": interval.get("endTime"),
+            "start_time": start_time,
+            "end_time": end_time,
             "distance_meters": round(distance_mm / 1000, 1) if distance_mm is not None else None,
             "steps": _to_number(metrics_summary.get("steps")),
             "average_pace_min_per_km": round(pace_sec_per_m * 1000 / 60, 2) if pace_sec_per_m is not None else None,
