@@ -131,11 +131,22 @@ Revisit (e.g. split into one JSON file per metric) only if a single file becomes
 ## Query API (`server.py`)
 
 Implements `docs/api-contract.md` exactly: `GET /api/health`, `GET /api/metrics`,
-`GET /api/metrics/{metric}`, `POST /api/sync`, plus serving `frontend/` as
-static files (so `python cli.py serve` is the only process needed for local
-dev, see `docs/local-dev-setup.md`). Built on `ThreadingHTTPServer` /
+`GET /api/metrics/{metric}`, `GET /api/metrics/{metric}/samples`, `POST
+/api/sync`, plus serving `frontend/` as static files (so `python cli.py
+serve` is the only process needed for local dev, see
+`docs/local-dev-setup.md`). Built on `ThreadingHTTPServer` /
 `BaseHTTPRequestHandler`, no third-party framework. CORS is wide open
 (`Access-Control-Allow-Origin: *`) since this only ever runs on localhost.
+
+**`GET /api/metrics/{metric}/samples`** (added for the activity detail
+view, see `docs/frontend-architecture.md`) is dispatched in `do_GET`
+*before* the generic `/api/metrics/{metric}` prefix match, since its path
+also starts with `/api/metrics/` - matched by an `endswith("/samples")`
+check instead. It re-walks the raw store points for `metric` (currently
+only `heart_rate`, see `SAMPLE_METRICS`) filtering by `sampleTime.physicalTime`
+against the request's `from`/`to` instants, rather than going through
+`_metric_records()`'s date-bucketed `_RESHAPERS` path - the whole point is
+to get readings finer than a calendar day.
 
 **Reshaping raw store points into the contract's per-metric shapes is now
 verified for all four metrics** against a real `backend/data/health_data.json`

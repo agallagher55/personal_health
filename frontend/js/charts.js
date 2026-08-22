@@ -28,6 +28,16 @@ function formatShortDate(dateStr) {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+// Alternate label formatter for drawSparkline's `formatLabel` option, for
+// series whose labels are full ISO instants (e.g. heart_rate samples
+// windowed to an activity, see components/activity-detail.js) rather than
+// bare dates.
+export function formatTimeOfDay(isoStr) {
+  const d = new Date(isoStr);
+  if (Number.isNaN(d.getTime())) return isoStr;
+  return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
 /**
  * Draws a simple line sparkline for `values` (an array of numbers; gaps can
  * be represented as null/undefined and are skipped, not interpolated).
@@ -37,7 +47,7 @@ function formatShortDate(dateStr) {
  * `labelExtremes` is set, and the first/last x-axis labels when `labels`
  * (e.g. each point's date) is provided.
  */
-export function drawSparkline(canvas, values, { color = "#3b82f6", padding = 4, labels = null, labelExtremes = true } = {}) {
+export function drawSparkline(canvas, values, { color = "#3b82f6", padding = 4, labels = null, labelExtremes = true, formatLabel = formatShortDate } = {}) {
   const { ctx, width, height } = prepareCanvas(canvas);
   ctx.clearRect(0, 0, width, height);
 
@@ -131,12 +141,12 @@ export function drawSparkline(canvas, values, { color = "#3b82f6", padding = 4, 
     ctx.font = LABEL_FONT;
     if (labels[0] === labels[labels.length - 1]) {
       ctx.textAlign = "center";
-      ctx.fillText(formatShortDate(labels[0]), width / 2, height - 2);
+      ctx.fillText(formatLabel(labels[0]), width / 2, height - 2);
     } else {
       ctx.textAlign = "left";
-      ctx.fillText(formatShortDate(labels[0]), padding, height - 2);
+      ctx.fillText(formatLabel(labels[0]), padding, height - 2);
       ctx.textAlign = "right";
-      ctx.fillText(formatShortDate(labels[labels.length - 1]), width - padding, height - 2);
+      ctx.fillText(formatLabel(labels[labels.length - 1]), width - padding, height - 2);
     }
   }
 }

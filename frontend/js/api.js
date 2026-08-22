@@ -31,6 +31,14 @@ export function getMetricDetail(metric, from, to) {
   return getJSON(`/api/metrics/${encodeURIComponent(metric)}${rangeQuery(from, to)}`);
 }
 
+// `from`/`to` here are full ISO 8601 UTC instants (e.g. an activity's own
+// start_time/end_time), not the bare dates rangeQuery() builds elsewhere -
+// see docs/api-contract.md's GET /api/metrics/{metric}/samples.
+export function getMetricSamples(metric, fromInstant, toInstant) {
+  const params = new URLSearchParams({ from: fromInstant, to: toInstant });
+  return getJSON(`/api/metrics/${encodeURIComponent(metric)}/samples?${params.toString()}`);
+}
+
 export async function triggerSync() {
   const res = await fetch("/api/sync", { method: "POST" });
   const body = await res.json().catch(() => null);

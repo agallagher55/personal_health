@@ -2,6 +2,7 @@ import { initMetricDetailPage } from "./metric-detail.js";
 import { drawSparkline } from "../charts.js";
 import { computeMetricStats } from "../stats.js";
 import { renderStatsPanel } from "../components/stats-panel.js";
+import { openActivityDetail } from "../components/activity-detail.js";
 
 function formatType(type) {
   if (!type) return "Activity";
@@ -36,6 +37,16 @@ function renderTable(tbody, records) {
 
   for (const ex of flattened) {
     const tr = document.createElement("tr");
+    tr.classList.add("data-table-row-clickable");
+    tr.tabIndex = 0;
+    tr.setAttribute("role", "button");
+    tr.addEventListener("click", () => openActivityDetail(ex));
+    tr.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openActivityDetail(ex);
+      }
+    });
     const cells = [
       ex.date,
       formatType(ex.type),
