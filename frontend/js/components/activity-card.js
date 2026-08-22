@@ -1,4 +1,5 @@
 import { buildActivityIcon } from "./activity-icons.js";
+import { openActivityDetail } from "./activity-detail.js";
 
 function formatType(type) {
   if (!type) return "Activity";
@@ -34,6 +35,16 @@ export function renderActivity(container, records) {
   list.className = "activity-list";
   for (const ex of flattened) {
     const item = document.createElement("li");
+    item.classList.add("activity-list-item-clickable");
+    item.tabIndex = 0;
+    item.setAttribute("role", "button");
+    item.addEventListener("click", () => openActivityDetail(ex));
+    item.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openActivityDetail(ex);
+      }
+    });
 
     const info = document.createElement("div");
     info.className = "activity-info";

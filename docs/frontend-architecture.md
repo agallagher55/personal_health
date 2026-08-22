@@ -73,6 +73,7 @@ frontend/
 │   │   ├── sleep-card.js
 │   │   ├── activity-card.js
 │   │   ├── activity-icons.js      # per-exercise-type icons
+│   │   ├── activity-detail.js     # per-activity detail dialog (see "Activity detail view" below)
 │   │   ├── simple-value-card.js   # shared card for {date, value} metrics (spo2, hrv, breathing_rate, temperature)
 │   │   ├── weight-card.js         # like simple-value-card, plus the kg/lb toggle
 │   │   └── stats-panel.js         # renders the detail-page stats sidebar from stats.js's output
@@ -144,6 +145,39 @@ current spots afterward, putting the table in the sidebar instead). `js/stats.js
 `js/components/stats-panel.js` renders the result; `metric-detail.js` calls
 a page-supplied `renderStats(container, records)` after each load, mirroring
 its existing `renderChart`/`renderTable` callbacks.
+
+## Activity detail view
+
+Clicking an exercise - in the dashboard's `activity-panel` list
+(`activity-card.js`) or the activity detail page's entries table
+(`pages/activity.js`) - opens `components/activity-detail.js`'s dialog via
+`openActivityDetail(exercise)`, where `exercise` is one flattened entry from
+`docs/api-contract.md`'s activity shape (both call sites already flatten
+`{date, exercises: [...]}` into one array per exercise for their own
+list/table rendering, so this just passes that same object through). Built
+on a single lazily-created native `<dialog>` (`showModal()`/`close()`,
+click-on-backdrop and Escape both close it for free), reused across opens
+rather than creating a new one each time.
+
+Shows: a summary tile grid (duration, calories, distance, steps, average
+pace, average heart rate, active zone minutes - straight from the
+`activity` record's `metricsSummary`-derived fields, each tile omitted
+when its field is `null`/`0`), a heart-rate-zone stacked bar (reusing
+`drawStackedBar`, the same widget `sleep-card.js` uses for sleep stages),
+and an intraday heart-rate line chart for the exercise's exact
+`start_time`–`end_time` window, fetched from `GET
+/api/metrics/heart_rate/samples` (see `docs/api-contract.md`) via
+`api.js`'s `getMetricSamples()`. `drawSparkline()` gained a `formatLabel`
+option (default `formatShortDate`, as before) so this chart can label its
+x-axis with time-of-day (`formatTimeOfDay()`, also in `charts.js`) instead
+of dates.
+
+There's no per-activity steps chart: this account/device only ever emits
+`steps` as daily rollup totals, never intraday samples (see
+`docs/backend-architecture.md`), so there's nothing to window against an
+activity's start/end. The activity's own `steps` tile (from
+`metricsSummary`, not a windowed query) covers "how many steps in this
+activity" instead.
 
 ## Resolved (previously open) questions
 

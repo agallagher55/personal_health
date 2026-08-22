@@ -201,12 +201,24 @@ def _reshape_sleep(points):
     return sorted(records, key=lambda r: r["date"])
 
 
+def _zone_minutes(zone_durations, key):
+    seconds = _parse_duration_seconds((zone_durations or {}).get(key))
+    return round(seconds / 60, 1) if seconds is not None else 0
+
+
 def _reshape_activity(points):
     """Fields live under exercise.interval (paired with
     exercise.interval.startUtcOffset/endUtcOffset - see
     _local_date_from_utc), exercise.exerciseType, and
-    exercise.metricsSummary (caloriesKcal). Duration comes from
-    exercise.activeDuration, a "<seconds>s" string."""
+    exercise.metricsSummary (caloriesKcal, plus - added for per-activity
+    detail, see docs/api-contract.md - distanceMillimeters, steps,
+    averagePaceSecondsPerMeter, averageHeartRateBeatsPerMinute,
+    activeZoneMinutes, and heartRateZoneDurations, a dict of
+    "<seconds>s"-string durations per zone). Duration comes from
+    exercise.activeDuration, a "<seconds>s" string. interval.startTime/
+    endTime (raw UTC instants) are passed through as start_time/end_time so
+    the frontend can query GET /api/metrics/heart_rate/samples for this
+    exact window."""
     by_date = {}
     for p in points:
         exercise = p.get("exercise")
@@ -222,10 +234,26 @@ def _reshape_activity(points):
             continue
         metrics_summary = exercise.get("metricsSummary") or {}
         duration_seconds = _parse_duration_seconds(exercise.get("activeDuration"))
+        distance_mm = _to_number(metrics_summary.get("distanceMillimeters"))
+        pace_sec_per_m = _to_number(metrics_summary.get("averagePaceSecondsPerMeter"))
+        zone_durations = metrics_summary.get("heartRateZoneDurations")
         record = {
             "type": exercise.get("exerciseType") or exercise.get("displayName"),
             "duration_minutes": round(duration_seconds / 60, 1) if duration_seconds is not None else None,
             "calories": _to_number(metrics_summary.get("caloriesKcal")),
+            "start_time": interval.get("startTime"),
+            "end_time": interval.get("endTime"),
+            "distance_meters": round(distance_mm / 1000, 1) if distance_mm is not None else None,
+            "steps": _to_number(metrics_summary.get("steps")),
+            "average_pace_min_per_km": round(pace_sec_per_m * 1000 / 60, 2) if pace_sec_per_m is not None else None,
+            "average_heart_rate": _to_number(metrics_summary.get("averageHeartRateBeatsPerMinute")),
+            "active_zone_minutes": _to_number(metrics_summary.get("activeZoneMinutes")),
+            "heart_rate_zones_minutes": {
+                "light": _zone_minutes(zone_durations, "lightTime"),
+                "moderate": _zone_minutes(zone_durations, "moderateTime"),
+                "vigorous": _zone_minutes(zone_durations, "vigorousTime"),
+                "peak": _zone_minutes(zone_durations, "peakTime"),
+            },
         }
         by_date.setdefault(d, []).append(record)
     return [{"date": d, "exercises": ex} for d, ex in sorted(by_date.items())]
@@ -366,6 +394,29 @@ def _reshape_breathing_rate(points):
     return [{"date": d, "value": round(sum(v) / len(v), 1)} for d, v in sorted(by_date.items())]
 
 
+# Metrics that can be queried intraday via GET /api/metrics/{metric}/samples
+# (see _handle_metric_samples), keyed to the nested payload key and the
+# field holding the reading - the same fields _reshape_heart_rate already
+# uses. Only heart_rate for now: it's the only sample-based metric a user
+# would want windowed to an activity's exact start/end (steps on this
+# account/device is daily-rollup only, never intraday - see
+# docs/backend-architecture.md - so there's nothing to window it against).
+SAMPLE_METRICS = {
+    "heart_rate": ("heartRate", "beatsPerMinute"),
+}
+
+
+def _parse_datetime(value):
+    """Parses a "Z"-suffixed UTC instant (ISO 8601, per api-contract.md's
+    samples endpoint) into an aware datetime, or None if missing/invalid."""
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
 _RESHAPERS = {
     "steps": _reshape_steps,
     "heart_rate": _reshape_heart_rate,
@@ -464,6 +515,44 @@ class Handler(BaseHTTPRequestHandler):
             "records": records,
         })
 
+    def _handle_metric_samples(self, metric, query):
+        """GET /api/metrics/{metric}/samples?from=<ISO datetime>&to=<ISO
+        datetime> - raw timestamped readings in [from, to], bypassing the
+        daily bucketing _metric_records()/_RESHAPERS do. Built for the
+        activity detail view (see docs/frontend-architecture.md): an
+        exercise's own start_time/end_time (raw UTC instants, now passed
+        through by _reshape_activity) become this endpoint's from/to, so
+        the frontend can chart heart rate for that exact workout window."""
+        if metric not in SAMPLE_METRICS:
+            self._send_error_json(404, f"metric not available intraday: {metric}")
+            return
+        from_str = query.get("from", [None])[0]
+        to_str = query.get("to", [None])[0]
+        from_dt = _parse_datetime(from_str)
+        to_dt = _parse_datetime(to_str)
+        if from_dt is None or to_dt is None:
+            self._send_error_json(400, "from and to must both be ISO 8601 datetimes")
+            return
+        nested_key, value_key = SAMPLE_METRICS[metric]
+        data_store = store.load_store()
+        samples = []
+        for p in data_store.get("metrics", {}).get(metric, []):
+            payload = p.get(nested_key)
+            if not isinstance(payload, dict):
+                continue
+            sample_time = payload.get("sampleTime")
+            if not isinstance(sample_time, dict):
+                continue
+            instant = _parse_datetime(sample_time.get("physicalTime"))
+            if instant is None or not (from_dt <= instant <= to_dt):
+                continue
+            value = _to_number(payload.get(value_key))
+            if value is None:
+                continue
+            samples.append({"time": sample_time.get("physicalTime"), "value": value})
+        samples.sort(key=lambda s: s["time"])
+        self._send_json(200, {"metric": metric, "from": from_str, "to": to_str, "samples": samples})
+
     def _handle_sync(self):
         try:
             results, errors = sync.sync_all()
@@ -492,6 +581,9 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_health()
         elif parsed.path == "/api/metrics":
             self._handle_metrics_summary(query)
+        elif parsed.path.startswith("/api/metrics/") and parsed.path.endswith("/samples"):
+            metric = parsed.path[len("/api/metrics/"):-len("/samples")]
+            self._handle_metric_samples(metric, query)
         elif parsed.path.startswith("/api/metrics/"):
             metric = parsed.path[len("/api/metrics/"):]
             self._handle_metric_detail(metric, query)
